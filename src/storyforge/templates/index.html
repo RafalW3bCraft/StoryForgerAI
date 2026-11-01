@@ -1,0 +1,19 @@
+{% extends 'base.html' %}
+{% block body %}
+<section class="hero">
+  <div class="kicker">THE STORY IS OURS TO WRITE</div>
+  <h1>Every viewer becomes a character.<br><em>Every choice becomes a story.</em></h1>
+  <p>AI StoryForge transforms Twitch chat into a collaborative fantasy world with persistent personas, evolving storylines, and a live broadcast overlay.</p>
+  <div class="actions"><a class="button primary" href="/overlay">Open Story Overlay</a>{% if host %}<a class="button" href="/host">Host Studio</a>{% else %}<a class="button" href="/auth/twitch?role=viewer">Connect Twitch Persona</a>{% endif %}</div>
+</section>
+{% if snap.story %}
+<div class="section-head"><h2>{{ snap.story.title }}</h2><span class="tag">{{ snap.story.stage }}</span></div>
+{% if snap.node %}<section class="panel"><div class="kicker">CURRENT CANON • {{ snap.node.provenance }}</div><h3>{{ snap.node.title }}</h3><p class="story-text">{{ snap.node.narrative }}</p><div class="choice-grid">{% for key, choice in snap.node.choices.items() %}<div class="choice"><span class="choice-key">{{ key }}</span>{{ choice }}</div>{% endfor %}</div></section>{% elif snap.proposal %}<section class="panel"><p class="muted-text">A scene is awaiting host approval.</p></section>{% endif %}
+{% else %}<section class="panel"><h2>No world has been created yet</h2><p class="muted-text">A host can sign in and start an original story. Demo mode allows local fixture interactions for testing.</p></section>{% endif %}
+<div class="section-head"><h2>Characters in the World</h2><span class="tag">Original avatars</span></div>
+<div class="persona-grid">{% for p in snap.personas or [] %}<article class="persona-card"><img src="/avatar/{{ p.id }}.svg" alt="Original portrait of {{ p.alias }}"><div><h3>{{ p.alias }}</h3><span class="tag">{{ p.archetype }}</span> <span class="tag">{{ p.trait }}</span><p class="muted-text">{{ 'Story Master' if p.is_host else 'Community Character' }} · Avatar v{{ p.revision }}</p></div></article>{% else %}<p class="muted-text">No participants yet. Send !join in Twitch chat after the stream connects.</p>{% endfor %}</div>
+<section class="panel command-guide"><h2>Chat is your controller</h2><div class="command-grid"><code>!join</code><span>Create your character</span><code>!persona scholar</code><span>Choose an archetype</span><code>!trait curious</code><span>Set a personality</span><code>!vote A</code><span>Decide the next branch</span><code>!line Your idea</code><span>Suggest dialogue</span><code>!twist Your idea</code><span>Propose a plot twist</span></div></section>
+{% if demo and not host %}
+<section class="panel"><h2>Demo host access</h2><p class="muted-text">Local-only demo sign-in. Set <code>DEMO_ADMIN_PASSWORD</code> in your environment before starting the app.</p><form action="/auth/demo" method="post" class="inline-form"><input type="hidden" name="csrf_token" value="{{ csrf }}"><label>Password<input type="password" name="password" required></label><button type="submit">Enter Host Studio</button></form></section>
+{% elif not demo and not host %}<section class="panel"><h2>Are you the streamer?</h2><a class="button" href="/auth/twitch?role=host">Sign in with Twitch as Host</a></section>{% endif %}
+{% endblock %}

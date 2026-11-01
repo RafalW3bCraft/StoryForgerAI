@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}AI StoryForge{% endblock %}</title>
+<link href="/static/style.css" rel="stylesheet">
+{% block head %}{% endblock %}
+</head>
+<body>
+<header class="bar">
+  <a href="/" class="brand"><span class="brand-mark">✦</span> AI <b>StoryForge</b></a>
+  <nav><a href="/">Story</a><a href="/overlay" target="_blank">OBS Overlay</a><a href="/graph.svg" target="_blank">Branch Graph</a>{% if host %}<a href="/host">Host Studio</a>{% endif %}<a href="/profile">My Persona</a></nav>
+  <span class="status {% if demo %}muted{% else %}good{% endif %}">{{ 'DEMO / OFFLINE' if demo else status.replace('_',' ') }}</span>
+</header>
+<main class="shell">
+  {% if message %}<div class="notice">{{ message }}</div>{% endif %}
+  {% if error and not demo %}<div class="notice error">Twitch: {{ error }}</div>{% endif %}
+  {% block body %}{% endblock %}
+</main>
+<footer>Python-native · Original procedural avatars · Real Twitch only when configured and authenticated · v0.1.0</footer>
+</body>
+</html>
