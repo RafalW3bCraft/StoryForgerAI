@@ -1,6 +1,6 @@
 # Final StoryForge evidence report
 
-**Evidence captured:** 2026-11-02 through 09:03 UTC
+**Evidence captured:** 2026-11-02 through 09:24 UTC
 
 **Working directory:** `/mnt/hostname/ai-storyforge`
 
@@ -8,7 +8,9 @@
 
 **Python:** default system Python 3.14.7; required verification ran in isolated Python 3.13.15 at `/tmp/storyforge-py313-venv`.
 
-**Tested source/test commit:** `9a36319112e8fd83200abcc2b43c81861176d183` (`Harden live StoryForge integration and finalize evidence`). The two operator-owned untracked files remain untouched. Remote publication and judge access must be verified separately after push.
+**Tested source/test commit:** `9a36319112e8fd83200abcc2b43c81861176d183` (`Harden live StoryForge integration and finalize evidence`).
+
+**Published release snapshot:** `4ef8e3ea16a0562df9a66e1b42ece05242d48449`. GitHub API and public repository page both returned HTTP 200; repository visibility is public; `git ls-remote origin main` matched the SHA. Actions run `41419869542` passed on that SHA for both Python 3.12 and 3.13. The two operator-owned untracked files remain untouched.
 
 The operator's pre-existing `StoryForgerAI_Codex_ECC_Finalization_Prompt.md` and `StoryForgerAI_Verified_Audit_2026-11-01.md` files were preserved and excluded from engineering staging. No secrets or database files were intentionally read into output or added to Git.
 
@@ -32,7 +34,7 @@ The operator's pre-existing `StoryForgerAI_Codex_ECC_Finalization_Prompt.md` and
 
 The same 50-event test hung inside the restricted sandbox's worker-thread wakeup path and was interrupted (exit 130). The complete test suite and coverage both passed outside the sandbox. This is a test-environment constraint, not evidence of a production runner result.
 
-GitHub Actions configuration is present at `.github/workflows/ci.yml`, with Python 3.12/3.13, least-privilege contents permissions, concurrency cancellation, timeout, full tests, coverage, Ruff, formatting, mypy, compile, pip check, pip-audit and Bandit. The workflow file is not a passing CI run; no run on the final pushed SHA has yet been observed.
+GitHub Actions configuration is present at `.github/workflows/ci.yml`, with Python 3.12/3.13, least-privilege contents permissions, concurrency cancellation, timeout, full tests, coverage, Ruff, formatting, mypy, compile, pip check, pip-audit and Bandit. Run [`41419869542`](https://github.com/RafalW3bCraft/StoryForgerAI/actions/runs/41419869542) completed successfully on pushed SHA `4ef8e3ea16a0562df9a66e1b42ece05242d48449`; both matrix jobs and every step passed.
 
 ## Configuration and security diagnostics
 
@@ -110,7 +112,7 @@ No actual `!join`, `!persona`, `!trait`, `!avatar`, `!vote`, contribution, two-v
 | Current proposal approval/branch flow | BLOCKED | AI proposal remains `PENDING` in `REVIEW`; host approval and real vote required. Existing AI canonical provenance persisted after app restart. |
 | Browser/OBS and demonstration | BLOCKED | HTTP routes pass; no visual OBS capture/video. |
 | Dependency and Bandit scans | PASS, scoped | pip-audit clean for audited packages; no Bandit Medium/High. Trivy/Gitleaks/independent security review not run. |
-| GitHub final revision / CI | BLOCKED pending publication | Need final push, exact `ls-remote` SHA/public-page check, and a passing Actions run on that SHA. |
+| GitHub revision / CI | PASS for published snapshot | Public repository and exact pushed SHA `4ef8e3e…` verified; CI run `41419869542` passed on Python 3.12 and 3.13. |
 | Genuine Codex ID / ECC | BLOCKED / PARTIAL | `/status` ID unavailable; ECC plugin absent. |
 | Eligibility / video / Devpost | BLOCKED / FAIL | Need organizer interpretation, <3-minute public/unlisted video, and actual Submitted status. |
 | Production operations | FAIL | No TLS deployment, restore drill, migration/rollback, distributed concurrency, operational monitoring or independent security assessment. |

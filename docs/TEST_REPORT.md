@@ -147,4 +147,14 @@ Mocked EventSub tests are not live evidence. No actual `!join`, `!persona schola
 .venv/bin/python -m storyforge doctor --live
 ```
 
-The final full-suite evidence was collected with Python 3.14.7 using the commands in the Nov 2 follow-up table. The clean Python 3.13.15 dependency installation passed; a separate full test run in that environment was not performed. Re-run the suite after any further source or test changes.
+This paragraph is a historical pre-finalization checkpoint: the earlier full-suite run used Python 3.14.7 and requested another Python 3.13 run. The current section at the top of this file supersedes it with the completed Python 3.13.15 full run.
+
+## Nov 2 public release and CI verification
+
+- Source/test commit: `9a36319112e8fd83200abcc2b43c81861176d183`.
+- Published release snapshot: `4ef8e3ea16a0562df9a66e1b42ece05242d48449`; `git push origin main` succeeded. `git ls-remote` and GitHub API both returned this exact `main` SHA.
+- GitHub API reported `private=false`; the public repository page returned HTTP 200.
+- GitHub Actions run [`41419869542`](https://github.com/RafalW3bCraft/StoryForgerAI/actions/runs/41419869542), event `push`, workflow `CI`, head SHA `4ef8e3ea16a0562df9a66e1b42ece05242d48449`: **success**. Both Python 3.12 and Python 3.13 jobs and all steps (install, tests, coverage, Ruff, format, mypy, compile, pip check, pip-audit, Bandit) completed successfully.
+- The two pre-existing operator files remained untracked and were not pushed. No `.env`, SQLite file or cache file is tracked.
+
+These GitHub checks do not substitute for real chat/vote/OBS evidence. The working local app continues to report an active subscription and zero real chat notifications.

@@ -8,7 +8,7 @@
 
 - [x] Preserved the Python/FastAPI/Jinja2/SQLite application, existing personas and active story data; no authored JavaScript or TypeScript was added.
 - [x] Added regression coverage for redacted diagnostics, explicit live AI configuration, provider JSON shape, malformed EventSub payloads, duplicate receipts, nonblocking ordered chat processing, and private SQLite file modes.
-- [x] Added a Python 3.12/3.13 GitHub Actions workflow with least-privilege contents access, timeouts, concurrency handling, test, coverage, Ruff, mypy, dependency and Bandit checks. A real Actions run on the final pushed SHA remains required.
+- [x] Added a Python 3.12/3.13 GitHub Actions workflow with least-privilege contents access, timeouts, concurrency handling, test, coverage, Ruff, mypy, dependency and Bandit checks. GitHub Actions run `41419869542` passed for both matrix jobs on published SHA `4ef8e3ea16a0562df9a66e1b42ece05242d48449`.
 - [x] Latest complete Python 3.13.15 suite: **76 passed**; coverage: **85%**, with `ResourceWarning` errors enabled. Ruff, formatter, mypy, compilation, `pip check`, pip-audit and Bandit Medium/High checks passed. See `../docs/TEST_REPORT.md`.
 - [x] Reproduced the configured provider's invalid choice shape; explicit JSON shape instructions now produce a live response that passed `NarrativeProposal` validation.
 - [x] Moved synchronous chat processing off the async WebSocket receive loop; the 50-event local regression completed in order without blocking the heartbeat.
@@ -30,7 +30,7 @@
 - [ ] **Browser and OBS:** capture the actual overlay in OBS at 1920×1080 with live personas, votes, and branch transition. No visual capture exists yet.
 - [ ] **Codex session ID:** run `/status` in the primary Codex thread and record its genuine ID. This tool interface cannot retrieve it; do not substitute an index or environment variable.
 - [ ] **ECC evidence:** native ECC plugin is not installed in this runtime. Existing documented ECC skill-guidance use is distinct from native plugin use; do not claim plugin execution.
-- [ ] **Public tested source:** push `9a36319112e8fd83200abcc2b43c81861176d183` and verify `origin/main`, GitHub page, and any Actions run against the exact final SHA. Do not include `.env`, database, cache, or operator audit/prompt files.
+- [x] **Public tested source:** pushed release snapshot `4ef8e3ea16a0562df9a66e1b42ece05242d48449`; `git ls-remote` matched, GitHub API reported public, the repository page returned HTTP 200, and Actions run `41419869542` passed on that SHA. Do not include `.env`, database, cache, or operator audit/prompt files.
 - [ ] **Eligibility:** ask the organizer how “newly created during the Submission Period” applies. The first Git commit is dated during the event, but the pre-existing MVP predates the current Codex pass and commit timestamp alone does not prove eligibility.
 - [ ] **YouTube demo:** record a public or unlisted video under 3 minutes showing real Twitch messages, the host-approved AI scene, vote-to-canon transition, OBS, and Codex development. Check that it contains no credentials, OAuth callback parameters, private chat, or unlicensed material. No video URL exists.
 - [ ] **Devpost:** complete all required fields in English, enter the real source/video/session URLs, then click **Submit** and verify the project is marked Submitted. Save Draft is not submission. No submission status is claimed.

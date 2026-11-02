@@ -8,7 +8,7 @@ Twitch chat moves quickly, and audience ideas can disappear when a poll ends. AI
 
 ## What it does
 
-The streamer acts as Story Master. Viewers join through Twitch chat, build persistent personas with procedural SVG avatars, contribute bounded lines or plot twists for host review, and vote on scene choices. The host reviews AI-generated proposals and contributions before they become canonical. SQLite stores personas, revisions, votes, the current story head, and alternate branches. A Jinja2 browser-source page displays the story for OBS and refreshes every three seconds.
+The streamer acts as Story Master. Viewers join through Twitch chat, build persistent personas with procedural SVG avatars, contribute bounded lines or plot twists for host review, and vote on scene choices. The host reviews AI-generated proposals and contributions before they become canonical. SQLite stores personas, revisions, votes, the current story head, and alternate branches. A Jinja2 browser-source page displays the story for OBS and refreshes every three seconds. Commands update Host Studio and the overlay; StoryForge does not reply in Twitch chat.
 
 ## How it is built
 
@@ -16,7 +16,7 @@ AI StoryForge uses Python, FastAPI, Jinja2, CSS, SQLAlchemy, SQLite, Pydantic, H
 
 ## How Codex contributed
 
-The existing MVP predates this Codex engineering pass. In the recorded Codex work, Codex added or repaired EventSub identity and subscription validation, OAuth origin handling, live configuration checks, AI response validation, chat cooldown and replay handling, aggregate redacted diagnostics, database permission enforcement, the Python 3.12/3.13 CI workflow, regression tests, and release documentation. The final Git revision and actual primary-thread Codex session ID must be verified before submission.
+The existing MVP predates this Codex engineering pass. In the recorded Codex work, Codex added or repaired EventSub identity and subscription validation, OAuth origin handling, live configuration checks, AI response validation, chat cooldown and replay handling, aggregate redacted diagnostics, database permission enforcement, the Python 3.12/3.13 CI workflow, regression tests, and release documentation. The public release snapshot `4ef8e3ea16a0562df9a66e1b42ece05242d48449` and a passing Actions run are verified. The actual primary-thread Codex session ID is still required before submission.
 
 ## Verification and limitations
 

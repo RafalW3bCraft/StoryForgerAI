@@ -51,3 +51,5 @@ The latest active tool environment did not expose ECC skill files or a registere
 5. **Final verification:** Python 3.13.15 full suite **76 passed**; coverage **85%** with ResourceWarnings treated as errors; Ruff, formatter, mypy (12 files), compileall, pip check, pip-audit and Bandit Medium/High checks passed. Current real health/DB evidence still has zero viewer notifications, personas, receipts, or votes.
 
 The two existing operator files stayed untouched and unstaged. No `/status` ID could be read from the tool interface. Native ECC installation/registration, live viewer testing, OBS recording, video publication, and Devpost submission are still external blockers.
+
+The final code/test commit is `9a36319112e8fd83200abcc2b43c81861176d183`; the evidence snapshot `4ef8e3ea16a0562df9a66e1b42ece05242d48449` was pushed to public `main`. GitHub Actions run `41419869542` passed on that release snapshot for Python 3.12 and 3.13. This records Codex engineering and GitHub CI evidence, not a native ECC plugin run.

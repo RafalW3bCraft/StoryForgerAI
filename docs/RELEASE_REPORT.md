@@ -1,10 +1,12 @@
 # AI StoryForge release gate report
 
-**Assessment date:** November 2, 2026 (evidence through 09:03 UTC)
+**Assessment date:** November 2, 2026 (evidence through 09:24 UTC)
 
 **Audited baseline:** `44fa0f4b33804826c78947ac781799a13f7f3940` on `main`
 
-**Tested code/test commit:** `9a36319112e8fd83200abcc2b43c81861176d183` (`Harden live StoryForge integration and finalize evidence`), committed at 2026-11-02 09:06:41 UTC. Remote publication is a separate step.
+**Tested code/test commit:** `9a36319112e8fd83200abcc2b43c81861176d183` (`Harden live StoryForge integration and finalize evidence`), committed at 2026-11-02 09:06:41 UTC; included in the published release snapshot below.
+
+**Published release snapshot:** `4ef8e3ea16a0562df9a66e1b42ece05242d48449`; public GitHub API returned HTTP 200 and `private=false`, the repository page returned HTTP 200, `git ls-remote` matched this SHA, and GitHub Actions run [`41419869542`](https://github.com/RafalW3bCraft/StoryForgerAI/actions/runs/41419869542) succeeded for both Python 3.12 and 3.13 matrix jobs. Later documentation-only commits may advance `main` without changing the tested source.
 
 **Remote comparison:** `git fetch --prune origin` succeeded; `origin/main` matched the baseline SHA.
 
@@ -27,7 +29,7 @@ This report supersedes older release decisions in the dated records below. The i
 | Story persistence and host approval | PARTIAL | SQLite contains a canonical node with `AI` provenance and a pending AI proposal; story stage is currently `REVIEW`. Current snapshot: 1 host persona, 0 viewer personas, 7 revisions, 0 chat receipts, 0 votes. The current proposal still needs host approval; no live viewer vote can be counted. |
 | Browser and OBS | BLOCKED | HTTP route checks were previously successful, but this session has no real browser/OBS capture. No 1920×1080 OBS acceptance evidence or video exists. |
 | Security/dependency checks | PARTIAL PASS | pip-audit found no known vulnerabilities among audited dependencies; Bandit reported no Medium/High findings. A high-confidence credential-signature scan of all 6 Git commits found 0 matches; `.env` is ignored and no `.env`/database file is tracked. Gitleaks, Trivy, and an independent security review are unavailable/not run. |
-| Git source | PARTIAL | The configured GitHub remote was reachable with `git ls-remote`; before final changes, `origin/main` matched the audited baseline. The final commit and public judge access must be verified after push. |
+| Git source and CI | PASS | Public repository page HTTP 200; GitHub API says public; `origin/main` matched published SHA `4ef8e3e…`. Actions run `41419869542` succeeded on that SHA for Python 3.12 and 3.13. |
 | Codex contribution | PARTIAL | This Codex pass made material code, regression-test, workflow and documentation changes. The primary-thread `/status` ID is not available to this tool interface and is still required. |
 | ECC | PARTIAL, guidance only | Earlier documented ECC skill guidance was applied as recorded in `docs/ECC_WORKFLOW.md`; this active environment did not provide the native ECC plugin. No plugin execution is claimed. |
 | New-project eligibility | BLOCKED / organizer interpretation needed | The repository's first commit falls in the event period, but the StoryForge MVP predates this Codex pass. A commit timestamp alone does not establish that the project was newly created during the submission window. |
@@ -48,19 +50,19 @@ This report supersedes older release decisions in the dated records below. The i
 
 | Gate | Status | Cause and evidence needed to close |
 |---|---|---|
-| A — Install, tests, type/lint/dependencies | PASS | Python 3.13.15 clean dev install and full checks recorded in `docs/TEST_REPORT.md`. GitHub Actions YAML exists, but a successful run on the final pushed SHA is still required. |
+| A — Install, tests, type/lint/dependencies | PASS | Python 3.13.15 clean dev install and full checks recorded in `docs/TEST_REPORT.md`. Actions run `41419869542` passed on published SHA `4ef8e3e…` for Python 3.12 and 3.13. |
 | B — 13 runtime variables and live probes | PARTIAL | Redacted local check passed. Twitch host token/identity, EventSub subscription, and AI response are externally verified. A fresh OAuth exchange to validate `TWITCH_CLIENT_SECRET`, actual redirect registration, and full production database backup/restore are not verified. |
 | C — Real Twitch chat and voting | BLOCKED | Subscription active but no actual notification or command reached the app. Need two real viewers, durable persona revisions and receipts, votes, and canonical transition. |
 | D — AI story end to end | PARTIAL | Real model response and persisted AI provenance are evidenced; current AI proposal is pending in `REVIEW`. Host approval, real vote resolution, second-scene continuity, and cross-restart live workflow remain incomplete. |
 | E — Browser and OBS | BLOCKED | Need a real browser session and OBS Browser Source at 1920×1080; capture the current scene/personas/votes/branch transition with no secrets visible. |
 | F — Production security/operations | FAIL | No independent assessment, HTTPS deployment, backup/restore drill, rotation/migration, deployment/rollback exercise, cross-process coordination, or operational monitoring evidence. Single-process SQLite remains the supported MVP profile. |
-| G — Hackathon submission package | FAIL | Need live two-viewer Twitch/OBS demo, genuine `/status` ID, tested public source SHA, YouTube video under 3 minutes, eligibility determination, complete Devpost form and final **Submit** verification. |
+| G — Hackathon submission package | FAIL | Public source and CI are verified. Need live two-viewer Twitch/OBS demo, genuine `/status` ID, YouTube video under 3 minutes, eligibility determination, complete Devpost form and final **Submit** verification. |
 
 ## Required operator actions
 
 1. In the primary Codex thread, run `/status` and record the actual session ID. Do not substitute this tool session or an environment/index ID.
 2. Reauthorize the broadcaster through the browser using the exact configured origin. This is needed to exercise the current Twitch client secret; do not expose the authorization code or callback URL in a recording.
-3. In the existing StoryForge channel, have two distinct viewers send standalone commands at least one second apart: `!join`; then one viewer `!persona scholar`, `!trait brave`, `!avatar random`; then each viewer `!vote A` or `!vote B`. First approve the pending proposal in Host Studio and open its vote. Do not create a new story over the active one. Confirm `/health`, SQLite receipts/revisions/votes, and the canonical transition.
+3. In the existing StoryForge channel, have two distinct viewers send standalone commands at least one second apart: `!join`; then one viewer `!persona scholar`, `!trait brave`, `!avatar random`; then each viewer `!vote A` or `!vote B`. First approve the pending proposal in Host Studio and open its vote. Do not create a new story over the active one. Observe results in Host Studio and `/overlay` (StoryForge does not reply in chat), then confirm `/health`, SQLite receipts/revisions/votes, and the canonical transition.
 4. Verify the overlay in OBS at 1920×1080, record the demonstrated flow and Codex work in a YouTube video shorter than three minutes, then verify the link as an unauthenticated viewer.
 5. Rotate credentials that may have appeared in the earlier ZIP or diagnostic output. Reauthorize or migrate the encrypted token before rotating `TOKEN_ENCRYPTION_KEY`; do not strand the existing vault token.
 6. Resolve the “newly created during the Submission Period” ambiguity with the organizer. The initial MVP predates the Codex pass, so the first commit timestamp does not settle eligibility.
