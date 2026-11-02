@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from hashlib import sha256
 from typing import Protocol
+from urllib.parse import urlsplit
 
 import httpx
 from pydantic import BaseModel, Field, field_validator
@@ -84,10 +85,31 @@ class OpenAICompatibleGenerator:
     def __init__(self, settings: Settings):
         self.settings = settings
         url = settings.ai_base_url.rstrip("/")
-        if not url.startswith("https://") and not (
-            settings.mode == "demo" and url.startswith("http://127.0.0.1")
-        ):
-            raise ValueError("AI endpoint must use HTTPS (or loopback in demo)")
+        try:
+            parsed = urlsplit(url)
+            local_http = (
+                settings.mode == "demo"
+                and parsed.scheme == "http"
+                and parsed.hostname
+                in {
+                    "localhost",
+                    "127.0.0.1",
+                    "::1",
+                }
+            )
+            valid = (
+                (parsed.scheme == "https" or local_http)
+                and bool(parsed.hostname)
+                and not parsed.username
+                and not parsed.password
+                and not parsed.query
+                and not parsed.fragment
+                and not parsed.path.rstrip("/").endswith("/chat/completions")
+            )
+        except ValueError:
+            valid = False
+        if not valid:
+            raise ValueError("AI_BASE_URL must be a safe provider base URL using HTTPS")
         self.url = url + "/chat/completions"
 
     async def generate(
@@ -132,15 +154,42 @@ class OpenAICompatibleGenerator:
             )
             response.raise_for_status()
             body = response.json()
-        try:
-            choices = body["choices"]
-            content = choices[0]["message"]["content"]
-        except (KeyError, IndexError, TypeError) as exc:
-            raise ValueError("AI provider returned no narrative content") from exc
+        if not isinstance(body, dict):
+            raise TypeError("AI provider returned a non-object response")
+        if "error" in body:
+            raise ValueError("AI provider returned an error object")
+        choices = body.get("choices")
+        if not isinstance(choices, list) or not choices:
+            raise ValueError("AI provider response omitted choices")
+        choice = choices[0]
+        if not isinstance(choice, dict):
+            raise TypeError("AI provider response had an invalid choice shape")
+        if choice.get("finish_reason") in {"length", "max_tokens", "incomplete"}:
+            raise ValueError("AI provider returned a truncated completion")
+        message = choice.get("message")
+        if not isinstance(message, dict):
+            raise TypeError("AI provider response omitted the assistant message")
+        if message.get("refusal"):
+            raise ValueError("AI provider refused the narrative request")
+        if "content" not in message:
+            if "tool_calls" in message:
+                raise ValueError("AI provider returned a tool call instead of narrative content")
+            raise ValueError("AI provider response omitted assistant content")
+        content = message["content"]
         if isinstance(content, list):
-            content = "".join(part.get("text", "") for part in content if isinstance(part, dict))
-        if not isinstance(content, str) or not content.strip():
-            raise ValueError("AI provider returned empty narrative content")
+            text_parts = [
+                part["text"]
+                for part in content
+                if isinstance(part, dict) and isinstance(part.get("text"), str)
+            ]
+            if not text_parts or not any(part.strip() for part in text_parts):
+                raise ValueError("AI provider returned content blocks without text")
+            content = "".join(text_parts)
+        elif isinstance(content, str):
+            if not content.strip():
+                raise ValueError("AI provider returned empty narrative text")
+        else:
+            raise TypeError("AI provider narrative content was not text")
         try:
             return NarrativeProposal.model_validate_json(content)
         except (TypeError, ValueError) as exc:

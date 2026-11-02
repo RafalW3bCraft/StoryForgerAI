@@ -149,6 +149,25 @@ class TwitchConnector:
                 },
             )
             resp.raise_for_status()
+            if resp.status_code != 202:
+                raise RuntimeError("Twitch did not return subscription confirmation")
+            try:
+                subscriptions = resp.json().get("data", [])
+                subscription = subscriptions[0]
+                transport = subscription["transport"]
+                condition = subscription["condition"]
+            except (AttributeError, IndexError, KeyError, TypeError, ValueError) as exc:
+                raise RuntimeError("Twitch returned an invalid subscription confirmation") from exc
+            if (
+                subscription.get("status") != "enabled"
+                or subscription.get("type") != "channel.chat.message"
+                or str(subscription.get("version")) != "1"
+                or condition.get("broadcaster_user_id") != self.settings.twitch_broadcaster_id
+                or condition.get("user_id") != self.settings.twitch_reader_id
+                or transport.get("method") != "websocket"
+                or transport.get("session_id") != session_id
+            ):
+                raise RuntimeError("Twitch returned an invalid subscription confirmation")
 
     async def consume(self, token: str) -> None:
         """Read EventSub, preserving the old session until a reconnect welcome."""
@@ -172,11 +191,14 @@ class TwitchConnector:
                     need_subscription = False
                     self.status = "LIVE_TWITCH"
                 elif kind == "session_notification":
-                    event = msg.get("payload", {}).get("event", {})
-                    if event.get("broadcaster_user_id") not in {
-                        None,
-                        self.settings.twitch_broadcaster_id,
-                    }:
+                    notification = msg.get("payload", {})
+                    subscription = notification.get("subscription", {})
+                    event = notification.get("event", {})
+                    if (
+                        subscription.get("type") != "channel.chat.message"
+                        or str(subscription.get("version")) != "1"
+                        or event.get("broadcaster_user_id") != self.settings.twitch_broadcaster_id
+                    ):
                         continue
                     content = event.get("message", {}).get("text", "")
                     msg_id = event.get("message_id") or msg.get("metadata", {}).get("message_id")
@@ -240,7 +262,9 @@ class TwitchConnector:
                 await self._stop.wait()
             except Exception as exc:  # noqa: BLE001 - connector must recover transient failures
                 self.status = "ERROR"
-                self.last_error = type(exc).__name__ + ": " + str(exc)[:160]
+                # Exception messages from HTTP/WebSocket clients can contain
+                # request URIs or provider details. Keep browser diagnostics redacted.
+                self.last_error = type(exc).__name__
                 await asyncio.sleep(delay)
                 delay = min(delay * 2, 45)
 

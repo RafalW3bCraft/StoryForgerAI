@@ -35,7 +35,8 @@ def render_avatar(persona: Persona, *, size: int = 256, variation: int = 0) -> s
     seed = sha256(
         (persona.seed + persona.archetype + persona.trait + str(variation)).encode()
     ).digest()
-    rng = random.Random(int.from_bytes(seed[:8], "big"))
+    # Randomness only varies cosmetic output; it never creates tokens or identities.
+    rng = random.Random(int.from_bytes(seed[:8], "big"))  # nosec B311
     skin = rng.choice(("#f1cbad", "#bc8369", "#e0ae82", "#765446", "#ddab9d"))
     eye = rng.choice(("#342e47", "#273b4c", "#60483e"))
     headgear = {

@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import re
 import time
-from collections import Counter
+from collections import Counter, OrderedDict
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
@@ -31,6 +31,29 @@ class StoryError(ValueError):
     pass
 
 
+CHAT_COMMAND_COOLDOWN_SECONDS = 0.75
+MAX_COOLDOWN_IDENTITIES = 2048
+MAX_RECENT_REJECTED_EVENTS = 4096
+REJECTED_EVENT_TTL_SECONDS = 600
+CHAT_COMMANDS = frozenset(
+    {
+        "!join",
+        "!leave",
+        "!help",
+        "!persona",
+        "!trait",
+        "!avatar",
+        "!vote",
+        "!line",
+        "!twist",
+        "!act",
+        "!story",
+        "!profile",
+        "!recap",
+    }
+)
+
+
 def _json(value) -> str:
     return json.dumps(value, sort_keys=True, ensure_ascii=True)
 
@@ -50,10 +73,12 @@ def _revision(db: Session, persona: Persona) -> None:
 class StoryService:
     def __init__(self, sessions: sessionmaker):
         self.sessions = sessions
-        # The MVP is deliberately single-process.  This small guard prevents
-        # chat spam from creating contribution rows repeatedly; EventReceipt
-        # remains the durable replay/idempotency control.
+        self._clock = time.monotonic
+        # This MVP is deliberately single-process. The bounded cooldown maps
+        # reduce per-viewer spam; accepted command receipts remain durable.
         self._last_contribution_command: dict[str, float] = {}
+        self._last_chat_command: dict[str, float] = {}
+        self._recent_rejected_events: OrderedDict[str, float] = OrderedDict()
 
     def _active(self, db: Session) -> StorySession | None:
         return db.scalar(select(StorySession).order_by(StorySession.id.desc()).limit(1))
@@ -171,11 +196,27 @@ class StoryService:
             world = World(title=title.strip(), premise=premise.strip(), tone=tone)
             db.add(world)
             db.flush()
-            story = StorySession(world_id=world.id, stage="GENERATING")
+            story = StorySession(
+                world_id=world.id, stage="GENERATING", generation_status="AWAITING"
+            )
             db.add(story)
             db.flush()
             db.add(AuditEvent(action="story.create", details=title[:120]))
             return story.id
+
+    def mark_generation_started(self) -> None:
+        with self.sessions.begin() as db:
+            story = self._active(db)
+            if not story or story.stage != "GENERATING":
+                raise StoryError("No scene is awaiting generation")
+            story.generation_status = "AWAITING"
+
+    def mark_generation_failed(self) -> None:
+        with self.sessions.begin() as db:
+            story = self._active(db)
+            if not story or story.stage != "GENERATING":
+                raise StoryError("No scene generation is active")
+            story.generation_status = "FAILED"
 
     def generator_context(self) -> dict:
         with self.sessions() as db:
@@ -259,6 +300,7 @@ class StoryService:
             db.flush()
             story.active_proposal_id = item.id
             story.stage = "REVIEW"
+            story.generation_status = "AI-GENERATED" if provenance == "AI" else "DEMO-GENERATED"
             return item
 
     def approve_proposal(self) -> StoryNode:
@@ -369,6 +411,7 @@ class StoryService:
             round_.winning_choice = winning
             round_.status = "CLOSED"
             story.stage = "GENERATING"
+            story.generation_status = "AWAITING"
             db.add(AuditEvent(action="vote.resolve", details=winning))
             return winning
 
@@ -446,8 +489,17 @@ class StoryService:
                     p.score = min(p.score + 1, 10000)
 
     def process_chat(self, message_id: str, user_id: str, display: str, text: str) -> str:
-        """One transaction for receipt, command and state effect; safe to replay."""
-        if not message_id or not user_id or len(message_id) > 128:
+        """Apply one recognized command once, throttling spam before durable writes."""
+        if (
+            not isinstance(message_id, str)
+            or not isinstance(user_id, str)
+            or not isinstance(display, str)
+            or not isinstance(text, str)
+            or not message_id
+            or not user_id
+            or len(message_id) > 128
+            or len(user_id) > 128
+        ):
             return "INVALID"
         raw = text.strip()
         if not raw.startswith("!") or len(raw) > 330:
@@ -455,10 +507,25 @@ class StoryService:
         cmd, _, value = raw.partition(" ")
         cmd = cmd.casefold()
         value = value.strip()
+        if cmd not in CHAT_COMMANDS:
+            return "UNKNOWN"
+        if cmd in {"!help", "!profile", "!story", "!recap"}:
+            return "HELP" if cmd == "!help" else "INFO"
         with self.sessions.begin() as db:
             if db.get(EventReceipt, message_id):
                 return "DUPLICATE"
+            now = self._clock()
+            rejected_at = self._recent_rejected_events.get(message_id)
+            if rejected_at is not None:
+                if now - rejected_at <= REJECTED_EVENT_TTL_SECONDS:
+                    return "DUPLICATE"
+                self._recent_rejected_events.pop(message_id, None)
+            previous = self._last_chat_command.get(user_id)
+            if previous is not None and now - previous < CHAT_COMMAND_COOLDOWN_SECONDS:
+                self._remember_rejected_event(message_id, now)
+                return "COOLDOWN"
             db.add(EventReceipt(message_id=message_id))
+            self._remember_chat_command(user_id, now)
             if cmd == "!join":
                 p = db.scalar(select(Persona).where(Persona.twitch_user_id == user_id))
                 if not p:
@@ -473,8 +540,6 @@ class StoryService:
                     _revision(db, p)
                 return "JOINED"
             p = db.scalar(select(Persona).where(Persona.twitch_user_id == user_id))
-            if cmd == "!help":
-                return "HELP"
             if cmd == "!leave":
                 return "LEFT" if self._delete_persona_in_db(db, user_id) else "NOT_JOINED"
             if cmd in {"!persona", "!trait", "!avatar"}:
@@ -510,11 +575,14 @@ class StoryService:
                     return "NOT_JOINED"
                 if not 3 <= len(value) <= 300:
                     return "INVALID"
-                now = time.monotonic()
-                previous = self._last_contribution_command.get(user_id)
-                if previous is not None and now - previous < 2.0:
+                now = self._clock()
+                previous_contribution = self._last_contribution_command.get(user_id)
+                if previous_contribution is not None and now - previous_contribution < 2.0:
                     return "COOLDOWN"
                 self._last_contribution_command[user_id] = now
+                if len(self._last_contribution_command) > MAX_COOLDOWN_IDENTITIES:
+                    oldest = next(iter(self._last_contribution_command))
+                    del self._last_contribution_command[oldest]
                 db.add(
                     Contribution(
                         session_id=story.id,
@@ -525,9 +593,24 @@ class StoryService:
                     )
                 )
                 return "QUEUED"
-            if cmd in {"!story", "!profile", "!recap"}:
-                return "INFO"
             return "UNKNOWN"
+
+    def _remember_chat_command(self, user_id: str, at: float) -> None:
+        self._last_chat_command[user_id] = at
+        if len(self._last_chat_command) > MAX_COOLDOWN_IDENTITIES:
+            oldest = next(iter(self._last_chat_command))
+            del self._last_chat_command[oldest]
+
+    def _remember_rejected_event(self, message_id: str, at: float) -> None:
+        while self._recent_rejected_events:
+            _, oldest_at = next(iter(self._recent_rejected_events.items()))
+            if at - oldest_at <= REJECTED_EVENT_TTL_SECONDS:
+                break
+            self._recent_rejected_events.popitem(last=False)
+        self._recent_rejected_events[message_id] = at
+        self._recent_rejected_events.move_to_end(message_id)
+        if len(self._recent_rejected_events) > MAX_RECENT_REJECTED_EVENTS:
+            self._recent_rejected_events.popitem(last=False)
 
     def snapshot(self) -> dict:
         with self.sessions() as db:
@@ -576,6 +659,7 @@ class StoryService:
                     "title": world.title,
                     "premise": world.premise,
                     "stage": story.stage,
+                    "generation_status": story.generation_status,
                     "round_id": story.active_round_id,
                 },
                 "node": {

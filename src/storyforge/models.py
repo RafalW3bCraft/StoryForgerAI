@@ -71,6 +71,7 @@ class StorySession(Base):
     active_round_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     active_proposal_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     paused_from_stage: Mapped[str | None] = mapped_column(String(24), nullable=True)
+    generation_status: Mapped[str] = mapped_column(String(24), default="AWAITING")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 

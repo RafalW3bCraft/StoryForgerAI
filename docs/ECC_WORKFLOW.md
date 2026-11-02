@@ -1,23 +1,40 @@
-# ECC + Codex integration status
+# Codex and ECC workflow evidence
 
-**Partially applied, not submission evidence.** Codex CLI 0.166.0 is present and the ECC 2.2.3 marketplace checkout is readable, but `codex plugin list --json` reported `installed: []`; the native plugin is not registered in this runtime. No `$configure-ecc` invocation or ECC agent run can be claimed. The repository also has an empty `.git` directory, so verifiable local commits cannot be produced here.
+## Availability
 
-For this Codex session, the available ECC guidance was read and applied as engineering review guidance:
+Codex CLI 0.166.0 was present. The local Codex plugin query reported `installed: []`; the native ECC plugin was not installed in this runtime. The cached official ECC checkout was readable, so its applicable guidance was read and applied as engineering process. No `$configure-ecc`, plugin agent invocation, or plugin execution is claimed.
 
-- `tdd-workflow`: tests were added for the voting regression, bounded context, malformed AI responses, and EventSub revocation before implementation verification.
-- `security-review`: OAuth/state/identity binding, secret handling, CSRF, XSS, prompt-injection boundaries, duplicate delivery, and token redaction were reviewed.
-- `verification-loop`: Ruff, formatting, mypy, compilation, targeted tests, coverage, and external-integration checks were run and recorded.
+The following cached ECC skills were read for this pass:
 
-These are truthful skill-guidance uses, not proof that the ECC plugin executed inside Codex. The local Codex session index identifies this turn as `01a1959c-5725-74e1-afc2-c3d3e45f1091`; the operator must confirm that ID with `/status` in the primary Codex UI before submission.
+- `tdd-workflow` — RED test before implementation, focused GREEN rerun, verification evidence.
+- `security-review` — secret handling, identity/authorization, input validation, CSRF, XSS, rate limits and errors.
+- `test-collaboration` — durable regression coverage for requirements and boundary behavior; distinguish mocked and real integration evidence.
+- `verification-loop` — build/type/lint/test/security/diff review and separate target acceptance from local validation.
 
-The installed GitHub ECC upstream documents a native Codex plugin integration. On the operator's Codex machine, inspect current CLI version and use the official procedure when compatible:
+The local marketplace being readable is not equivalent to native plugin installation. Marketplace listing could not be confirmed online in this restricted environment.
 
-```bash
-codex plugin marketplace add affaan-m/ECC
-codex plugin add ecc@ecc
-codex plugin list --json
-```
+## Cycles applied
 
-Then use `$configure-ecc` inside Codex if available. Do not combine native plugin installation with ECC's deprecated legacy sync path. Read https://github.com/affaan-m/ECC/blob/main/.codex-plugin/README.md before changing the environment.
+1. **EventSub trust boundary:** added failing tests for missing/wrong broadcaster identity and invalid subscription acknowledgments; tightened notification filtering and response validation; reran the EventSub broadcaster, confirmation, reconnect, and revocation tests.
+2. **AI response correctness:** added a failing test for a response marked truncated despite valid-looking JSON; rejected truncation reasons and reran valid, malformed, empty, and truncated completion tests.
+3. **Configuration/security:** added failing live callback/Twitch ID validation tests; required secure callback origins and numeric IDs; introduced a redacted diagnostic for all recognized environment settings.
+4. **Chat resource control:** reproduced cross-command cooldown bypass, invalid-vote spam, replay of cooldown-rejected IDs, and durable receipts for unknown/info commands; added per-viewer cooldowns, bounded rejected-ID dedupe, and no-write handling for unknown/info commands.
+5. **Endpoint safety and error redaction:** rejected credential-bearing or duplicated AI base URLs and stopped surfacing raw transient EventSub exception messages; tests first demonstrated both defects.
+6. **Generation provenance:** a review test reproduced approval overwriting `AI-GENERATED`/`DEMO-GENERATED`; removed that overwrite while keeping canonical approval represented by the resolved proposal and story node. Focused regression passed.
+7. **Security review:** a direct route test showed remote access to the demo password login; restricted it to loopback. A sentinel regression showed secret-bearing `Settings.__repr__`; marked secrets non-representable. A configured secret appeared in the earlier failure output; rotate it before release.
+8. **Model request cost control:** a blocking fake provider regression showed concurrent host retries could issue two model requests. Added a per-app async lock; simultaneous retries now make one provider call. This remains single-process protection.
+9. **Verification and error-path repair:** final Ruff review found an exception variable referenced outside its handler; fixed it and reran Ruff/mypy. Final targeted run: 51 passed, 3 HTTP tests deselected, 76% coverage; Ruff, format, mypy, compileall, Jinja parsing, and `pip check` passed. Bounded external probes and limitations are in `docs/TEST_REPORT.md`.
+10. **OAuth origin/session failure:** cached ECC TDD and Python-testing guidance was applied with failing route regressions first. Redacted origin metadata reproduced the `localhost` versus `127.0.0.1` cookie mismatch. Login now redirects to the fixed configured origin before writing OAuth state; an off-origin callback forwards only the OAuth code and state to the configured callback; missing-session callbacks return to the configured home. Invalid state remains rejected without consuming a valid pending state. Uvicorn access logging is disabled to avoid recording OAuth query strings. The cached Python reviewer artifact and security-review checklist were used to review redirect trust, cookie scope, logs, and state handling. See the Nov 2 continuation in `docs/TEST_REPORT.md` for current evidence and known test-runner limits. The native ECC plugin remains uninstalled and no plugin invocation is claimed.
+11. **Dependency security:** `pip-audit` reproduced seven advisories for installed `cryptography 47.0.0`; its project constraint `<48` blocked patched releases. Raised the floor to `50.0.2`, reinstalled both ignored environments, reran dependency audits with no known findings, and reran the available 58-test suite.
+12. **Diagnostic SQL review:** Bandit reported two Medium B608 findings in the SQLite write probe. The generated UUID identifier was not user-controlled, but the probe was simplified to a fixed-name main-database table created and rolled back inside a write transaction. Its rollback regression passed; Bandit then reported zero Medium/High findings. Low heuristic findings were reviewed and annotated with their non-security use.
+13. **HTTP/OAuth follow-up:** Local `.env` diagnostics passed shape checks without printing values; the app prints a loopback HTTP URL, matching the plain HTTP runner. Added a regression that every off-origin HTTP request redirects directly to the configured origin before session middleware, safe OAuth status feedback, and startup guidance for TLS-vs-HTTP. The sandbox-bound test runner stalled in worker dispatch, but the complete 68-test suite, including all HTTP acceptance tests, passed outside the sandbox. No application sync handler was moved onto the event loop.
 
-For the continued project: open a Codex session in this repository, read `AGENTS.md`, use available ECC TDD/security/Python review workflows, fix the findings, run tests and record evidence in `docs/CODEX_BUILD_LOG.md`. Capture the actual `/status` session ID from the Codex thread where the substantive development work occurs. **This file does not substitute for actual tool-use evidence.**
+These are skill-guidance applications in the Codex session, not native ECC plugin evidence. The primary Codex `/status` session ID was not exposed through this interface. A local session-index entry must not be substituted.
+
+The cached ECC `agent-architecture-audit` and benchmark-optimization artifacts were inspected. They were not invoked: the OAuth cookie-origin failure is ordinary web/session boundary debugging, and this change makes no performance claim. No standalone Python-review *skill* is installed; the cached `agents/python-reviewer.md` artifact was read and used as a manual review checklist.
+
+## Commit and release limitations
+
+The ECC TDD skill recommends Git checkpoints after RED and GREEN. The workspace exposes `.git` as read-only; the attempted RED checkpoint failed because Git could not create `.git/index.lock`. No commits were created, and no commit references are claimed. The current changes must be reviewed and committed in a writable checkout.
+
+The native ECC plugin should be installed and verified in the operator's Codex environment if available. The actual `/status` ID, live Twitch operation, successful model output, browser/OBS evidence, and submission artifacts remain outstanding. Full local tests and static checks are recorded in `docs/TEST_REPORT.md`.

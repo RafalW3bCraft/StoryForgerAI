@@ -2,7 +2,7 @@
 
 ## Processes
 
-One FastAPI process serves the host dashboard, public story page, Twitch OAuth callback, persona editor, deterministic/avatar renderer, OBS page and Graph SVG. Its lifespan starts one background `TwitchConnector` task in live mode. SQLite is authoritative; SQLAlchemy sessions are committed in transactions. Running multiple Uvicorn workers is **not supported** without redesigning the EventSub lease and writer coordination.
+One FastAPI process serves the host dashboard, public story page, Twitch OAuth callback, persona editor, deterministic/avatar renderer, OBS page and Graph SVG. A pure ASGI middleware redirects every off-origin HTTP request to the fixed `APP_BASE_URL` before session handling and adds security headers. Its lifespan starts one background `TwitchConnector` task in live mode. SQLite is authoritative; SQLAlchemy sessions are committed in transactions. Running multiple Uvicorn workers is **not supported** without redesigning the EventSub lease and writer coordination.
 
 No authored JavaScript or TypeScript is used. Browser UI is Jinja2-rendered HTML/CSS. OBS synchronization is HTML refresh every three seconds; host actions return full page responses.
 
@@ -29,6 +29,6 @@ The EventSub adapter uses `channel.chat.message` v1 and a user OAuth token with 
 - Host dashboard refreshes manually; overlay page refreshes every three seconds, not streaming DOM deltas.
 - Chat informational commands have no outbound Twitch response integration.
 - Single process/SQLite is the supported operating model.
-- Current `StoryService.process_chat` has idempotent event receipt tracking but no durable per-user command cooldown or long-term receipt cleanup job.
+- `StoryService.process_chat` writes receipts only for recognized state-changing commands, persists accepted message IDs, and uses bounded process-local per-viewer cooldown and rejected-event replay caches. The app also serializes model generation with an in-process lock. These controls do not coordinate multiple workers, and accepted receipt retention/cleanup remains a deployment concern.
 - Persona relationships, voice capture, camera guidance, image-generation models, richer alternate-timeline exploration, and multi-stream collaboration are not implemented.
 - Live EventSub and AI provider behavior remains unverified without user credentials.

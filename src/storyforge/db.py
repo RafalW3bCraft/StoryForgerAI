@@ -30,6 +30,15 @@ def make_engine(url: str):
             connection.execute(
                 text("ALTER TABLE story_sessions ADD COLUMN paused_from_stage VARCHAR(24)")
             )
+    columns = {column["name"] for column in inspect(engine).get_columns("story_sessions")}
+    if "generation_status" not in columns:
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    "ALTER TABLE story_sessions ADD COLUMN generation_status "
+                    "VARCHAR(24) NOT NULL DEFAULT 'UNKNOWN'"
+                )
+            )
     with engine.begin() as connection:
         connection.execute(
             text(

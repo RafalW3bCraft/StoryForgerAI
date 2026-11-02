@@ -1,5 +1,7 @@
 import asyncio
 import json
+import sqlite3
+from contextlib import closing
 from typing import ClassVar
 
 import pytest
@@ -40,6 +42,32 @@ def test_database_enforces_one_open_round_index(tmp_path):
     with engine.connect() as connection:
         indexes = {row[1] for row in connection.execute(text("PRAGMA index_list('voting_rounds')"))}
     assert "uq_open_voting_round_per_session" in indexes
+    engine.dispose()
+
+
+def test_existing_database_migrates_generation_status_column(tmp_path):
+    database = tmp_path / "legacy.db"
+    with closing(sqlite3.connect(database)) as connection, connection:
+        connection.execute(
+            "CREATE TABLE story_sessions ("
+            "id INTEGER PRIMARY KEY, world_id INTEGER NOT NULL, stage VARCHAR(24) NOT NULL, "
+            "current_node_id INTEGER, active_round_id INTEGER, active_proposal_id INTEGER, "
+            "created_at DATETIME)"
+        )
+        connection.execute(
+            "INSERT INTO story_sessions (id, world_id, stage) VALUES (1, 1, 'READY')"
+        )
+
+    engine = make_engine("sqlite+pysqlite:///" + str(database))
+    with engine.connect() as connection:
+        columns = {
+            row[1] for row in connection.execute(text("PRAGMA table_info('story_sessions')"))
+        }
+        status = connection.execute(
+            text("SELECT generation_status FROM story_sessions WHERE id = 1")
+        ).scalar_one()
+    assert {"paused_from_stage", "generation_status"} <= columns
+    assert status == "UNKNOWN"
     engine.dispose()
 
 
@@ -155,10 +183,23 @@ def test_oauth_helpers_use_exact_callback_and_authenticated_user(monkeypatch, tm
 def test_websocket_mock_reconnect_preserves_subscription(monkeypatch, tmp_path):
     from storyforge import twitch
 
-    settings = Settings(mode="demo", database=str(tmp_path / "twitch.db"), secret="x" * 40)
+    settings = Settings(
+        mode="demo",
+        database=str(tmp_path / "twitch.db"),
+        secret="x" * 40,
+        twitch_broadcaster_id="channel-1",
+        twitch_reader_id="channel-1",
+    )
     engine = make_engine(settings.db_url)
     sessions = factory(engine)
     service = StoryService(sessions)
+    clock = [100.0]
+
+    def tick():
+        clock[0] += 1.0
+        return clock[0]
+
+    monkeypatch.setattr(service, "_clock", tick)
     connector = TwitchConnector(settings, sessions, service)
     subscription_ids = []
 
@@ -181,11 +222,13 @@ def test_websocket_mock_reconnect_preserves_subscription(monkeypatch, tmp_path):
             "session_notification",
             {
                 "event": {
+                    "broadcaster_user_id": "channel-1",
                     "message_id": "chat-1",
                     "chatter_user_id": "user-1",
                     "chatter_user_name": "Ada",
                     "message": {"text": "!join"},
-                }
+                },
+                "subscription": {"type": "channel.chat.message", "version": "1"},
             },
         ),
         msg(
@@ -199,11 +242,13 @@ def test_websocket_mock_reconnect_preserves_subscription(monkeypatch, tmp_path):
             "session_notification",
             {
                 "event": {
+                    "broadcaster_user_id": "channel-1",
                     "message_id": "chat-2",
                     "chatter_user_id": "user-1",
                     "chatter_user_name": "Ada",
                     "message": {"text": "!persona scholar"},
-                }
+                },
+                "subscription": {"type": "channel.chat.message", "version": "1"},
             },
         ),
     ]
@@ -274,6 +319,176 @@ def test_websocket_revocation_is_terminal(monkeypatch, tmp_path):
         asyncio.run(connector.consume("fake-token"))
     assert connector.status == "REVOKED"
     assert socket.closed
+    engine.dispose()
+
+
+def test_eventsub_error_status_does_not_expose_exception_details(monkeypatch, tmp_path):
+    from storyforge import twitch
+
+    settings = Settings(
+        mode="live",
+        database=str(tmp_path / "error-redaction.db"),
+        secret="x" * 40,
+        twitch_client_id="client-id",
+        twitch_client_secret="client-secret",
+        twitch_broadcaster_id="111",
+        twitch_reader_id="111",
+        token_key=Fernet.generate_key().decode(),
+    )
+    engine = make_engine(settings.db_url)
+    connector = TwitchConnector(settings, factory(engine), StoryService(factory(engine)))
+    sentinel = "private-token-in-error-detail"
+
+    async def fail_token(_settings, _sessions):
+        raise RuntimeError(sentinel)
+
+    async def stop_after_error(_delay):
+        connector.stop()
+
+    monkeypatch.setattr(twitch, "get_host_token", fail_token)
+    monkeypatch.setattr(twitch.asyncio, "sleep", stop_after_error)
+    asyncio.run(connector.run_forever())
+
+    assert connector.status == "ERROR"
+    assert sentinel not in str(connector.last_error)
+    engine.dispose()
+
+
+def test_websocket_ignores_chat_without_exact_broadcaster_identity(monkeypatch, tmp_path):
+    from storyforge import twitch
+
+    settings = Settings(
+        mode="demo",
+        database=str(tmp_path / "broadcaster.db"),
+        secret="x" * 40,
+        twitch_broadcaster_id="broadcaster-1",
+        twitch_reader_id="broadcaster-1",
+    )
+    engine = make_engine(settings.db_url)
+    sessions = factory(engine)
+    service = StoryService(sessions)
+    connector = TwitchConnector(settings, sessions, service)
+
+    def event(message_id, user_id, broadcaster_id=None):
+        data = {
+            "message_id": message_id,
+            "chatter_user_id": user_id,
+            "chatter_user_name": user_id,
+            "message": {"text": "!join"},
+        }
+        if broadcaster_id is not None:
+            data["broadcaster_user_id"] = broadcaster_id
+        return json.dumps(
+            {
+                "metadata": {"message_type": "session_notification"},
+                "payload": {
+                    "subscription": {"type": "channel.chat.message", "version": "1"},
+                    "event": data,
+                },
+            }
+        )
+
+    messages = [
+        json.dumps(
+            {
+                "metadata": {"message_type": "session_welcome"},
+                "payload": {"session": {"id": "session-1", "keepalive_timeout_seconds": 15}},
+            }
+        ),
+        event("missing-broadcaster", "missing-id"),
+        event("wrong-broadcaster", "wrong-id", "other-channel"),
+        event("right-broadcaster", "valid-id", "broadcaster-1"),
+    ]
+
+    class FakeSocket:
+        async def recv(self):
+            message = messages.pop(0)
+            if not messages:
+                connector.stop()
+            return message
+
+        async def close(self):
+            pass
+
+    async def fake_connect(url, **kwargs):
+        return FakeSocket()
+
+    async def fake_subscribe(token, session_id):
+        assert session_id == "session-1"
+
+    monkeypatch.setattr(twitch.websockets, "connect", fake_connect)
+    connector.subscribe = fake_subscribe
+    asyncio.run(connector.consume("test-token"))
+
+    assert service.persona("missing-id") is None
+    assert service.persona("wrong-id") is None
+    assert service.persona("valid-id") is not None
+    engine.dispose()
+
+
+def test_eventsub_subscription_response_must_confirm_enabled_chat_subscription(
+    monkeypatch, tmp_path
+):
+    from storyforge import twitch
+
+    settings = Settings(
+        mode="live",
+        database=str(tmp_path / "subscription.db"),
+        secret="x" * 40,
+        twitch_client_id="client-id",
+        twitch_client_secret="client-secret",
+        twitch_broadcaster_id="111",
+        twitch_reader_id="111",
+        token_key=Fernet.generate_key().decode(),
+    )
+    engine = make_engine(settings.db_url)
+    connector = TwitchConnector(settings, factory(engine), StoryService(factory(engine)))
+
+    class Response:
+        status_code = 202
+
+        def __init__(self, body):
+            self.body = body
+
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return self.body
+
+    class Client:
+        body: ClassVar[dict] = {
+            "data": [
+                {
+                    "status": "enabled",
+                    "type": "channel.chat.message",
+                    "version": "1",
+                    "condition": {"broadcaster_user_id": "111", "user_id": "111"},
+                    "transport": {"method": "websocket", "session_id": "session-1"},
+                }
+            ]
+        }
+
+        def __init__(self, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            pass
+
+        async def post(self, url, json, headers):
+            assert url == twitch.HELIX + "/eventsub/subscriptions"
+            assert json["type"] == "channel.chat.message"
+            return Response(self.body)
+
+    monkeypatch.setattr(twitch.httpx, "AsyncClient", Client)
+    asyncio.run(connector.subscribe("test-token", "session-1"))
+
+    Client.body = {"data": [{"status": "websocket_disconnected"}]}
+    with pytest.raises(RuntimeError, match="subscription confirmation"):
+        asyncio.run(connector.subscribe("test-token", "session-1"))
     engine.dispose()
 
 
@@ -375,7 +590,7 @@ def test_ai_provider_rejects_malformed_or_empty_content(monkeypatch):
             )
         )
     FakeClient.body = {"choices": []}
-    with pytest.raises(ValueError, match="no narrative content"):
+    with pytest.raises(ValueError, match="omitted choices"):
         asyncio.run(
             generator.generate(
                 world="An original world",
@@ -385,3 +600,105 @@ def test_ai_provider_rejects_malformed_or_empty_content(monkeypatch):
                 contributions=[],
             )
         )
+    FakeClient.body = {"choices": [{"message": {}}]}
+    with pytest.raises(ValueError, match="omitted assistant content"):
+        asyncio.run(
+            generator.generate(
+                world="An original world",
+                history="",
+                decision="open gate",
+                personas=[],
+                contributions=[],
+            )
+        )
+    FakeClient.body = {"choices": [{"message": {"content": ""}}]}
+    with pytest.raises(ValueError, match="empty narrative text"):
+        asyncio.run(
+            generator.generate(
+                world="An original world",
+                history="",
+                decision="open gate",
+                personas=[],
+                contributions=[],
+            )
+        )
+    FakeClient.body = {"choices": [{"message": {"content": [{"image": "private"}]}}]}
+    with pytest.raises(ValueError, match="content blocks without text"):
+        asyncio.run(
+            generator.generate(
+                world="An original world",
+                history="",
+                decision="open gate",
+                personas=[],
+                contributions=[],
+            )
+        )
+
+
+def test_ai_provider_rejects_truncated_structured_completion(monkeypatch):
+    from storyforge import ai
+
+    settings = Settings(
+        mode="demo",
+        ai_base_url="https://provider.test/v1",
+        ai_api_key="fake",
+        ai_model="test-model",
+    )
+
+    class Response:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {
+                "choices": [
+                    {
+                        "finish_reason": "length",
+                        "message": {
+                            "content": json.dumps(
+                                {
+                                    "title": "A Truncated Scene",
+                                    "narrative": "A response may look valid while the provider says it was cut short.",
+                                    "choices": ["Open the old door", "Leave the atlas behind"],
+                                }
+                            )
+                        },
+                    }
+                ]
+            }
+
+    class Client:
+        def __init__(self, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            pass
+
+        async def post(self, url, json, headers):
+            return Response()
+
+    monkeypatch.setattr(ai.httpx, "AsyncClient", Client)
+    with pytest.raises(ValueError, match="truncated"):
+        asyncio.run(
+            OpenAICompatibleGenerator(settings).generate(
+                world="A short premise.",
+                history="",
+                decision="open the door",
+                personas=[],
+                contributions=[],
+            )
+        )
+
+
+def test_ai_provider_rejects_unsafe_or_duplicated_base_url():
+    settings = Settings(
+        mode="live",
+        ai_base_url="https://user:password@provider.test/v1/chat/completions",
+        ai_api_key="fake",
+        ai_model="test-model",
+    )
+    with pytest.raises(ValueError, match="AI_BASE_URL"):
+        OpenAICompatibleGenerator(settings)
