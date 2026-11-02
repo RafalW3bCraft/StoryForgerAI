@@ -7,7 +7,7 @@
 
 ## Current finalization evidence — November 2, 2026
 
-The entries below are the current verification snapshot and supersede earlier test counts and external-state conclusions later in this chronology. They were run against the current code working tree derived from the audited baseline; the operator's two pre-existing untracked files were preserved.
+The entries below are the current verification snapshot and supersede earlier test counts and external-state conclusions later in this chronology. They were run against code/test commit `9a36319112e8fd83200abcc2b43c81861176d183`, derived from the audited baseline; the operator's two pre-existing untracked files were preserved.
 
 | Command / check | Result | Evidence |
 |---|---|---|

@@ -2,6 +2,8 @@
 
 **Record only after the real acceptance flow succeeds.** Use a running StoryForge instance, an authorized Twitch channel with genuine viewer messages, one real validated AI scene, and the actual Codex development thread. Do not substitute simulator activity or static screenshots for Twitch operation.
 
+StoryForge does not reply in Twitch chat. Show command effects in Host Studio and the `/overlay` browser source.
+
 | Time | Show and say |
 |---|---|
 | 0:00–0:15 | Show the real Twitch channel beside StoryForge/OBS. Point to `LIVE_TWITCH` and the channel identity without showing credentials. Introduce chat-driven branching stories. |

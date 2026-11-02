@@ -3,7 +3,7 @@
 **Date:** 2026-11-02 UTC
 **Primary Codex `/status` ID:** not captured; this execution interface does not expose the primary Codex `/status` command. Do not use a local session-index ID as a substitute.
 **Git baseline:** `44fa0f4b33804826c78947ac781799a13f7f3940` on `main`; `origin/main` matched after fetch at the start of finalization. The two operator-provided untracked audit/prompt files remain untouched.
-**Finalization changes:** material Codex-authored code/tests/docs are recorded below; their committed revision is recorded after the final commit.
+**Finalization code/test commit:** `9a36319112e8fd83200abcc2b43c81861176d183` (`Harden live StoryForge integration and finalize evidence`), 2026-11-02 09:06:41 UTC.
 
 The initial AI StoryForge MVP predates this Codex pass and was bootstrapped in its original ChatGPT/container context. This log records only the work performed in the current Codex engineering pass; it does not attribute the original MVP to Codex.
 

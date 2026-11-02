@@ -4,6 +4,8 @@
 
 **Audited baseline:** `44fa0f4b33804826c78947ac781799a13f7f3940` on `main`
 
+**Tested code/test commit:** `9a36319112e8fd83200abcc2b43c81861176d183` (`Harden live StoryForge integration and finalize evidence`), committed at 2026-11-02 09:06:41 UTC. Remote publication is a separate step.
+
 **Remote comparison:** `git fetch --prune origin` succeeded; `origin/main` matched the baseline SHA.
 
 **Decision:** **NOT READY** for hackathon submission or production.

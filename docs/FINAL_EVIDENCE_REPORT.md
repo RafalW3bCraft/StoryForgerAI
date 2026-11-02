@@ -8,7 +8,7 @@
 
 **Python:** default system Python 3.14.7; required verification ran in isolated Python 3.13.15 at `/tmp/storyforge-py313-venv`.
 
-**Finalization commit:** see the current Git revision and release report after the commit; no remote update is claimed until `git push` and public verification succeed.
+**Tested source/test commit:** `9a36319112e8fd83200abcc2b43c81861176d183` (`Harden live StoryForge integration and finalize evidence`). The two operator-owned untracked files remain untouched. Remote publication and judge access must be verified separately after push.
 
 The operator's pre-existing `StoryForgerAI_Codex_ECC_Finalization_Prompt.md` and `StoryForgerAI_Verified_Audit_2026-11-01.md` files were preserved and excluded from engineering staging. No secrets or database files were intentionally read into output or added to Git.
 
@@ -85,7 +85,7 @@ Read-only HTTP route checks against the restarted app:
 | `/auth/twitch?role=host` | 307 | Generated callback matched the configured origin; no grant/token exchange. |
 | `/auth/callback` with synthetic access-denied state | 303 | Safe redirect to configured origin; no JSON detail response. |
 
-No actual `!join`, `!persona`, `!trait`, `!avatar`, `!vote`, contribution, two-viewer vote, or canonical branch transition has been verified. The mock 50-event burst is not a substitute. No real OBS Browser Source, 1920×1080 capture, or YouTube footage was produced.
+No actual `!join`, `!persona`, `!trait`, `!avatar`, `!vote`, contribution, two-viewer vote, or canonical branch transition has been verified. StoryForge does not reply in Twitch chat; verify commands through the redacted counters, persisted state, Host Studio and `/overlay`. The mock 50-event burst is not a substitute. No real OBS Browser Source, 1920×1080 capture, or YouTube footage was produced.
 
 ## Codex, ECC, provenance and submission
 
