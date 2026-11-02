@@ -101,7 +101,7 @@ Use the supported Python 3.12+ environment and development dependencies installe
 
 ## Known limitations
 
-- Twitch host OAuth and a schema-valid live model response have passed redacted probes. A real EventSub chat message and Host Studio-saved/approved AI proposal still need operator verification; browser/OBS visuals also remain unverified.
+- Twitch host OAuth and a schema-valid live model response passed redacted probes; Host Studio has saved and approved an `AI-GENERATED` canonical scene. Real EventSub chat/votes and browser/OBS visuals still need verification.
 - Single-process SQLite and in-memory command cooldowns suit this MVP, not multi-worker deployment.
 - Informational chat commands do not send outbound Twitch messages.
 - The overlay refreshes the full document; no camera, voice, generated-image or other optional media feature is implemented.

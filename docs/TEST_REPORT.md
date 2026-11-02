@@ -22,7 +22,8 @@ The starting checkout was `d6aa6ff7fce8ce2b82bcba05d6c42cb183d1a874`. Prior fixe
 | Redacted local doctor | **PASS, local only** | All 13 recognized variable names and roles were printed without values; each local validation passed and the SQLite write probe passed. |
 | Twitch OAuth | **PASS** | `.venv/bin/python -m storyforge doctor --probe twitch`: **VERIFIED (host token and broadcaster identity)**. The current `APP_BASE_URL` is `http://localhost:8000`; the login route's generated `redirect_uri` was verified as `http://localhost:8000/auth/callback`. |
 | AI provider | **PASS** | `.venv/bin/python -m storyforge doctor --probe ai`: **VERIFIED (live response passed `NarrativeProposal` validation)** after the provider-specific fix. |
-| Live app health | **PASS** | `GET http://localhost:8000/health`: HTTP 200, `twitch=LIVE_TWITCH`, `eventsub_subscribed=true`; `last_real_chat_event_seen=false` and `ai_last_generation=NOT GENERATED`. A saved Host Studio proposal is still pending the operator's UI retry. |
+| Live app health | **PASS** | `GET http://localhost:8000/health`: HTTP 200, `twitch=LIVE_TWITCH`, `eventsub_subscribed=true`, `ai_last_generation=VERIFIED`; no real chat message has been seen. |
+| Persisted AI story and host approval | **PASS** | Read-only SQLite check: `generation_status=AI-GENERATED`, story stage `VOTING`, current canonical node provenance `AI`, `is_canon=true`. No narrative text was printed. |
 | Clean Python 3.13 dependency install | **PASS** | Installed `.[dev]` into `/tmp/storyforge-py313-venv`; `pip check` passed. The environment's event-loop/thread bridge still timed out independently of StoryForge. |
 
 The prior OAuth issue included an HTTPS request to a plain-HTTP listener and a stale running process using `127.0.0.1` while `.env` now specifies `localhost`. The app was restarted from the current configuration; it prints `http://localhost:8000`. The registered and generated callback is `http://localhost:8000/auth/callback`. `ConfiguredOriginMiddleware` redirects off-origin HTTP requests to the fixed `APP_BASE_URL`; TLS sent to this plain HTTP listener fails before ASGI and cannot be redirected. The subsequent redacted Twitch probe now verifies the encrypted host token and broadcaster identity.
@@ -39,7 +40,7 @@ An earlier pre-fix `doctor --live` run found no host token and an empty model re
 
 The live failure reproduced as an HTTP-success response with an empty assistant `content` field. Configuration inspection, with secrets withheld, identified `api.featherless.ai/v1` and `Qwen/Qwen3.8-27B`. A bounded real request using Featherless's `chat_template_kwargs: {"enable_thinking": false}` returned non-empty output (`finish_reason=stop`, 892 content characters); the full StoryForge probe then passed `NarrativeProposal` validation. Featherless documents this switch for reasoning models in its [chat-template kwargs guide](https://featherless.ai/docs/chat-template-kwargs).
 
-Added the option only for Featherless-hosted Qwen3 model IDs; other OpenAI-compatible providers retain their original payload. The new regression failed before the fix because the request omitted `chat_template_kwargs`, then passed after the fix. Verification: AI integration tests **4 passed**, AI diagnostic tests **4 passed**, full suite **69 passed**, coverage **84%**, Ruff/format/mypy/compile passed. The app was restarted with the fix. Its health reports `ai_last_generation=NOT GENERATED`, so the next live step is to retry generation in Host Studio and verify the saved proposal is labeled `AI-GENERATED` before approval.
+Added the option only for Featherless-hosted Qwen3 model IDs; other OpenAI-compatible providers retain their original payload. The new regression failed before the fix because the request omitted `chat_template_kwargs`, then passed after the fix. Verification: AI integration tests **4 passed**, AI diagnostic tests **4 passed**, full suite **69 passed**, coverage **84%**, Ruff/format/mypy/compile passed. After restart, Host Studio saved and approved a live proposal. A read-only database check confirmed `AI-GENERATED`, `VOTING`, and a canonical node with `AI` provenance. The next live evidence needed is real chat delivery and votes; health still reports no real chat message.
 
 ## Earlier automated checkpoint before the Nov 2 OAuth continuation
 
@@ -72,7 +73,7 @@ The latest separate redacted live probes and app health produced these results:
 - **Twitch OAuth API: VERIFIED** — the host token and configured broadcaster identity passed the redacted live doctor.
 - **AI provider: VERIFIED** — a real response passed `NarrativeProposal` validation after disabling Featherless Qwen3 thinking mode.
 - **Application runtime: VERIFIED** — `/health` returned HTTP 200; Twitch is `LIVE_TWITCH`, EventSub subscription is active, and no real message has yet been observed.
-- **Saved AI generation: NOT GENERATED** — the probe validates a real proposal but does not save it. Retry from Host Studio and confirm the saved status is `AI-GENERATED`.
+- **Saved AI generation: VERIFIED** — app health and a read-only database check show an `AI-GENERATED` canonical node; the story is in `VOTING` after host approval.
 
 Mocked EventSub tests are not live evidence. No actual `!join`, `!persona scholar`, `!trait curious`, or `!vote A` was sent in a Twitch channel. No real AI scene was approved. Browser and OBS verification were unavailable.
 

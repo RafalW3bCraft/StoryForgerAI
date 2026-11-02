@@ -24,7 +24,7 @@
 - [x] Complete the full local test gate. The sandbox-bound attempt stalled in its worker bridge, then the complete suite passed outside the sandbox: 69 passed, including all HTTP acceptance tests.
 - [x] Complete a real Twitch broadcaster OAuth flow and verify broadcaster identity. Redacted `doctor --probe twitch` reports the host token and broadcaster identity verified. `APP_BASE_URL` and registered callback match `http://localhost:8000` and `http://localhost:8000/auth/callback`.
 - [ ] Verify EventSub `channel.chat.message` delivery on the real channel, then prove real `!join`, persona customization, and votes modify persisted state. Health reports a subscription, but no real chat message has been observed.
-- [ ] Generate through Host Studio, confirm the saved status is `AI-GENERATED`, and obtain host approval. The live AI probe now passes schema validation, but the app has not yet saved a proposal (`ai_last_generation=NOT GENERATED`).
+- [x] Generate through Host Studio and approve a real provider scene. Read-only SQLite evidence confirms `generation_status=AI-GENERATED`, story stage `VOTING`, and current canonical node provenance `AI`.
 - [ ] Complete the host/viewer/voting/canonical-branch/restart acceptance flow with two actual viewers.
 - [ ] Verify the overlay in a browser and OBS at 1920×1080 using the real running session.
 - [ ] Capture the actual primary Codex `/status` session ID. No substitute ID is acceptable.
@@ -39,7 +39,7 @@
 
 - [x] Twitch OAuth: **verified**. Redacted `doctor --probe twitch` confirmed the host token and broadcaster identity; callback is `http://localhost:8000/auth/callback`.
 - [ ] EventSub and live chat: **partial**. Health reports the subscription active, but no real message or `!join`, `!persona`, or `!vote` has succeeded in evidence.
-- [x] AI provider: **verified probe**. `doctor --probe ai` returned a real narrative that passed `NarrativeProposal` validation after the Qwen reasoning-mode fix. Host Studio persistence and approval remain pending.
+- [x] AI provider and host approval: **verified**. `doctor --probe ai` passed `NarrativeProposal` validation; Host Studio then persisted an `AI-GENERATED` scene and approved it into the canonical story.
 - [ ] Browser/OBS: **not verified**. The application health endpoint and database-backed snapshot responded in the final live doctor, but no browser visual or OBS capture exists.
 - [ ] GitHub judge access: **not verified**. The code/test commit exists locally but has not been pushed; remote visibility is unverified.
 - [ ] Codex session ID, video URL, and Devpost submission: **not available**.

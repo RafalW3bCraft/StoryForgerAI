@@ -26,9 +26,9 @@ The available ECC TDD, security-review, test-collaboration, and verification-loo
 
 ## Verification and current status
 
-Local verification reports 69 passed, including the three HTTP acceptance tests, and 84% coverage. Ruff, formatting, mypy, compilation, `pip check`, pip-audit, and Bandit Medium/High checks pass. The redacted live Twitch probe verifies broadcaster identity, and the real AI probe passed narrative-schema validation; no real chat message or Host Studio-saved scene has yet been verified.
+Local verification reports 69 passed, including the three HTTP acceptance tests, and 84% coverage. Ruff, formatting, mypy, compilation, `pip check`, pip-audit, and Bandit Medium/High checks pass. The redacted live Twitch probe verifies broadcaster identity. A real model response passed narrative validation and Host Studio saved and approved an `AI-GENERATED` canonical scene. Real viewer chat/votes and OBS visuals remain unverified.
 
-Twitch host OAuth and the configured AI provider passed their redacted live probes. The running app reports an active EventSub subscription, but no real chat event has been observed and no proposal has yet been saved from Host Studio. Browser/OBS visuals were not captured. Do not claim full live operation until real chat, a saved/approved AI proposal, and OBS presentation are demonstrated.
+Twitch host OAuth and the configured AI provider passed their redacted live probes. Host Studio saved and approved an `AI-GENERATED` canonical scene; the story is waiting in `VOTING`. The app reports an active EventSub subscription, but no real chat event or viewer vote has been observed. Browser/OBS visuals were not captured. Do not claim full live operation until real chat, viewer votes, and OBS presentation are demonstrated.
 
 The initial MVP predates this Codex session. The hackathon rules require a project newly created during the submission period; the project’s eligibility must be checked against the complete development history. Do not claim organizer approval that has not been obtained.
 

@@ -18,7 +18,7 @@ The official submission deadline is November 2, 2026 at 2:00 PM Pacific. Officia
 | Twitch OAuth | PASS | `.venv/bin/python -m storyforge doctor --probe twitch` verified the encrypted host token and broadcaster identity. Current app origin and registered callback are `http://localhost:8000` and `http://localhost:8000/auth/callback`. |
 | EventSub | BLOCKED (chat evidence) | Health reports `LIVE_TWITCH` and `eventsub_subscribed=true`, but no real chat message has been observed. Verify channel chat delivery and real commands. |
 | AI provider | PASS | `.venv/bin/python -m storyforge doctor --probe ai` verified a real response against `NarrativeProposal` after the provider-specific fix. |
-| Host Studio saved AI scene and approval | BLOCKED | Health still reports `ai_last_generation=NOT GENERATED`; the live probe validates but does not persist a proposal. Generate from Host Studio, verify `AI-GENERATED`, then approve it. |
+| Host Studio saved AI scene and approval | PASS | Health reports `ai_last_generation=VERIFIED`; read-only SQLite state is `AI-GENERATED`, stage `VOTING`, and current canonical node provenance `AI`. No story text was recorded in the audit. |
 | Persona persistence | PASS locally | SQLite persona/revision/opt-out tests and host callback identity tests pass with mocked Twitch responses. Two real Twitch viewers and restart persistence remain unverified. |
 | Host controls and permissions | BLOCKED (external) | Full HTTP demo, CSRF, and host action tests pass locally. Real Twitch-host OAuth and browser-operated controls remain unverified. |
 | OBS and browser | BLOCKED | Health endpoint is reachable and SQLite snapshot verified, but no browser visual or OBS capture was performed. |
@@ -40,9 +40,9 @@ The official submission deadline is November 2, 2026 at 2:00 PM Pacific. Officia
 | G4 — Working Twitch OAuth | **PASS** | The redacted live probe verified the stored host token and broadcaster identity. The login route generated exactly `http://localhost:8000/auth/callback`, matching the registered URL. |
 | G5 — Real EventSub chat | **BLOCKED** | EventSub subscription is active, but no real chat event has been seen. Send and verify a real message from the configured channel; record no token. |
 | G6 — Persistent viewer personas | **BLOCKED** | SQLite persistence/revision/deletion tests pass locally, but two actual Twitch viewers and persistence across a live application restart were not verified. |
-| G7 — Real AI story generation | **BLOCKED** | Provider probe now passes `NarrativeProposal` validation. The running app still reports no saved generation. Generate through Host Studio, verify the saved proposal is `AI-GENERATED`, and approve it. |
-| G8 — Host actions and permissions | **BLOCKED** | Twitch host identity is verified and local host/CSRF/action tests pass, but the user has not yet retried Host Studio generation and approval in the browser. |
-| G9 — Live vote changes canon | **BLOCKED** | Only local/synthetic vote flow is covered. Demonstrate real channel votes and one committed canonical result. |
+| G7 — Real AI story generation | **PASS** | `doctor --probe ai` validated a live response; the app then saved an `AI-GENERATED` proposal and a host-approved canonical node with `AI` provenance. Health and read-only DB state confirm this; the story is now in `VOTING`. |
+| G8 — Host actions and permissions | **PASS** | Verified Twitch host identity, live Host Studio generation, host approval into canon, and transition to `VOTING`; automated CSRF and authorization regressions also pass. |
+| G9 — Live vote changes canon | **BLOCKED** | The story is waiting in `VOTING`, but no real viewer chat/vote event has been observed. Demonstrate real channel votes and a resulting canonical transition. |
 | G10 — OBS overlay visually verified | **BLOCKED** | No browser/OBS access. Record the live 1920×1080 source with actual personas, vote totals and branch transition. |
 | G11 — Codex implementation and session ID | **BLOCKED** | Codex changes and local code/test commit `5c6b54946fbcdef2b3573618bf0b55070ac8581b` are present, but primary-thread `/status` ID was unavailable. Capture the genuine ID using `/status`; no substitute is acceptable. |
 | G12 — ECC workflow applied | **PASS (skills only)** | ECC TDD/security/test-collaboration/verification guidance was applied. Native plugin was unavailable (`installed: []`); do not claim plugin execution. |
@@ -55,7 +55,7 @@ The official submission deadline is November 2, 2026 at 2:00 PM Pacific. Officia
 1. Preserve the two pre-existing untracked operator audit/prompt files. The relevant code, tests, and reports are committed locally; obtain the actual primary-session `/status` ID. Do not reuse an index-derived ID.
 2. Push the reviewed local commits from an authorized environment and verify judge access. No push is claimed here.
 3. Preserve the full-suite evidence; current Ruff, format, mypy, compile, dependency consistency, pip-audit, and Bandit Medium/High checks pass. Run Trivy/Gitleaks and an independent security review.
-4. Retry Host Studio generation with the fix, save an `AI-GENERATED` proposal and approve it. Then verify a real EventSub chat message, two viewer personas, live votes, and persistence across restart. Keep demo and live evidence distinct.
+4. Verify a real EventSub chat message, two viewer personas, live votes, the resulting canonical transition, and persistence across restart. Keep demo and live evidence distinct.
 5. Verify the real overlay in browser/OBS, record the required video, verify repository access, and submit the Devpost entry.
 6. Rotate credentials that may have appeared in the previously supplied external ZIP before any public release.
 
@@ -63,7 +63,7 @@ The official submission deadline is November 2, 2026 at 2:00 PM Pacific. Officia
 
 The redacted `.env` report confirms live mode, 13 locally valid variables, SQLite writable, and loopback HTTP port 8000. The user's latest server output prints `http://127.0.0.1:8000`; use that exact `http://` URL. Uvicorn's repeated invalid-request warnings are consistent with a client sending TLS/HTTPS to its plain HTTP port; such a handshake cannot reach an app redirect. `ConfiguredOriginMiddleware` now sends every off-origin HTTP request directly to fixed `APP_BASE_URL`, before session handling, and callback error pages no longer expose a JSON detail object. A simulated HTTP 400 regression verifies safe status feedback without logging or reflecting the code/body. One read-only Twitch authorize request returned 302, but no user grant or token exchange occurred. These are not real OAuth success evidence.
 
-Latest results: `doctor --probe twitch` **VERIFIED** host token and broadcaster identity; `doctor --probe ai` **VERIFIED** a real schema-valid model response; `/health` **VERIFIED** HTTP 200 with `LIVE_TWITCH` and active EventSub subscription. No real chat event or Host Studio saved generation has yet been observed. No real `!join`, `!persona`, or `!vote` evidence exists.
+Latest results: `doctor --probe twitch` **VERIFIED** host token and broadcaster identity; `doctor --probe ai` **VERIFIED** a real schema-valid model response; Host Studio saved and host-approved an `AI-GENERATED` canonical scene, and the story is in `VOTING`. `/health` reports HTTP 200, `LIVE_TWITCH`, active EventSub subscription, and no real chat event. No real `!join`, `!persona`, or `!vote` evidence exists.
 
 **HACKATHON SUBMISSION READY: NO**
 
