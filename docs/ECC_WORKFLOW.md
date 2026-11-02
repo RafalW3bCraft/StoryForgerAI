@@ -35,6 +35,6 @@ The cached ECC `agent-architecture-audit` and benchmark-optimization artifacts w
 
 ## Commit and release limitations
 
-The ECC TDD skill recommends Git checkpoints after RED and GREEN. The workspace exposes `.git` as read-only; the attempted RED checkpoint failed because Git could not create `.git/index.lock`. No commits were created, and no commit references are claimed. The current changes must be reviewed and committed in a writable checkout.
+The ECC TDD skill recommends Git checkpoints after RED and GREEN. Initial sandbox access could not write `.git`, so the requested local commit was created after explicit elevated filesystem approval: `144e3a3849ace53325211ecd5b77549fdc73ba1e`. The two operator-provided untracked audit/prompt files were not staged. No push was performed.
 
 The native ECC plugin should be installed and verified in the operator's Codex environment if available. The actual `/status` ID, live Twitch operation, successful model output, browser/OBS evidence, and submission artifacts remain outstanding. Full local tests and static checks are recorded in `docs/TEST_REPORT.md`.

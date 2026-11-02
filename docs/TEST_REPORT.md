@@ -1,13 +1,13 @@
 # Test and verification report
 
 **Run date:** 2026-11-02 UTC
-**Checkout:** `main` at `d6aa6ff` before this working-tree pass
+**Checkout:** `main`; tested code and test commit `144e3a3849ace53325211ecd5b77549fdc73ba1e` (documentation follow-up follows this commit)
 **Runtime:** Linux, Python 3.14.7. The project declares Python 3.12+.
 **Key installed versions:** FastAPI 0.162.0, Starlette 1.10.0, SQLAlchemy 2.1.6, Pydantic 2.14.2, cryptography 50.0.2, httpx 0.28.1, httpx2 2.16.0 (installed in the environment but no longer required by project tests), websockets 17.4, pytest 9.2.0, pytest-cov 7.1.0, Ruff 0.17.3, mypy 2.4.1.
 
 ## Nov 2 follow-up: OAuth origin and runtime diagnostics
 
-The current checkout still has pre-existing uncommitted changes on `main` at `d6aa6ff`; this follow-up preserves them. Python 3.14.7 was used for the checks below.
+The starting checkout was `d6aa6ff7fce8ce2b82bcba05d6c42cb183d1a874`. The relevant application, test, and evidence changes were committed locally as `144e3a3849ace53325211ecd5b77549fdc73ba1e`; the two operator-provided untracked audit/prompt files were left untouched. Python 3.14.7 was used for the checks below.
 
 | Check | Current result | Evidence |
 |---|---|---|
@@ -77,7 +77,7 @@ Mocked EventSub tests are not live evidence. No actual `!join`, `!persona schola
 - A previous operator audit reports that a `.env` was included in an external ZIP. Treat any credentials present in that archive as exposed and rotate them before release.
 - A failing pytest diagnostic exposed a configured secret because the `Settings` dataclass's generated representation included secret fields. The secret fields now use `repr=False`, covered by a sentinel regression. Treat the value visible in the earlier diagnostic output as exposed and rotate it; no value is repeated here.
 - The requested Codex `/status` session ID was not available through this execution interface. A local session-index identifier is not accepted as a substitute.
-- The `.git` directory is mounted read-only. Git commit creation failed with `Unable to create ... .git/index.lock`; these changes are not committed or pushed.
+- Local code/test commit `144e3a3849ace53325211ecd5b77549fdc73ba1e` was created after explicit elevated filesystem approval. No push was performed. The configured remote was not checked for public accessibility.
 
 ## Reproduction commands
 

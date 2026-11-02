@@ -28,7 +28,8 @@
 - [ ] Complete the host/viewer/voting/canonical-branch/restart acceptance flow with two actual viewers.
 - [ ] Verify the overlay in a browser and OBS at 1920×1080 using the real running session.
 - [ ] Capture the actual primary Codex `/status` session ID. No substitute ID is acceptable.
-- [ ] Run the full change set from a writable Git checkout, create reviewable commits, push the current changes, and verify judge access to the repository. The current `.git` mount is read-only.
+- [x] Create a reviewable local code/test commit: `144e3a3849ace53325211ecd5b77549fdc73ba1e`.
+- [ ] Push the reviewed commit(s) and verify judge access to the repository. No push was performed; remote visibility is unverified.
 - [ ] Review eligibility against the official “newly created” rule and obtain an organizer interpretation if needed. The first Git commit is dated within the entry period, but the original MVP predates this Codex pass and the timestamp alone does not establish eligibility.
 - [ ] Record and verify a public YouTube demo shorter than three minutes showing real Twitch operation and the actual Codex development session; add its real URL only after verification.
 - [ ] Complete all Devpost fields and verify the entry is marked **Submitted** before November 2, 2026, 2:00 PM PST.
@@ -40,7 +41,7 @@
 - [ ] EventSub and live chat: **not verified**. No live subscription/event was received; no actual `!join`, `!persona`, or `!vote` succeeded in evidence.
 - [ ] AI provider: **failed probe**. The endpoint returned an empty assistant-content field; no validated live proposal or host approval exists. Configure a compatible model response and rerun.
 - [ ] Browser/OBS: **not verified**. The application health endpoint and database-backed snapshot responded in the final live doctor, but no browser visual or OBS capture exists.
-- [ ] GitHub judge access: **not verified**. Latest changes are uncommitted and unpushed because `.git` is read-only here.
+- [ ] GitHub judge access: **not verified**. The code/test commit exists locally but has not been pushed; remote visibility is unverified.
 - [ ] Codex session ID, video URL, and Devpost submission: **not available**.
 
 See [the release gate report](../docs/RELEASE_REPORT.md) and [the exact test evidence](../docs/TEST_REPORT.md). The official rules require an eligible newly created project, Codex evidence, accessible repository, a qualifying YouTube video, and a completed Devpost submission: https://twitchcon-codex.devpost.com/rules

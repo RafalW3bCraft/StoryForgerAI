@@ -1,7 +1,7 @@
 # AI StoryForge — release gate report
 
 **Assessment date:** November 2, 2026 UTC
-**Checkout:** `main`, current HEAD `d6aa6ff7fce8` (`origin/main`); the working tree has pre-existing and current uncommitted changes. `.git` is read-only in this environment.
+**Checkout:** `main`; local code/test commit `144e3a3849ace53325211ecd5b77549fdc73ba1e` is present. It has not been pushed; two pre-existing operator audit/prompt files remain untracked and untouched.
 **Decision:** **NOT READY** for hackathon submission or production.
 
 The official submission deadline is November 2, 2026 at 2:00 PM Pacific. Official rules require a project newly created during the submission period, Codex use/session ID, accessible repository, and a public YouTube demo under three minutes showing real Twitch operation and Codex. Git metadata shows the first commit (`d6aa6ff`) at 2026-11-01 07:20:22 UTC, within the stated submission period. The initial StoryForge MVP existed before this Codex pass; the commit date alone does not establish when every submitted component was created or provide an organizer-approved eligibility interpretation.
@@ -24,7 +24,7 @@ The official submission deadline is November 2, 2026 at 2:00 PM Pacific. Officia
 | Security/dependency scan | BLOCKED (incomplete) | `pip-audit` reports no known vulnerabilities; Bandit reports zero Medium/High findings. Trivy, Gitleaks, and independent review remain unrun. |
 | Codex session record | BLOCKED | Substantive changes exist in the working tree; genuine `/status` ID unavailable through this execution interface. |
 | ECC engineering cycle | PASS, guidance only | Cached official TDD/security/test-collaboration/verification skill guidance was read and applied; native plugin is not installed. |
-| Git evidence and publication | BLOCKED | `.git` is read-only, so no commit/push was possible; remote URL is configured but latest changes and public accessibility are unverified. |
+| Git evidence and publication | BLOCKED | A local code/test commit exists, but no push was performed; remote URL is configured but public accessibility is unverified. |
 | YouTube video | FAIL | No video recorded or URL supplied. |
 | Devpost entry | FAIL | No completed submission. |
 
@@ -43,16 +43,16 @@ The official submission deadline is November 2, 2026 at 2:00 PM Pacific. Officia
 | G8 — Host actions and permissions | **BLOCKED** | Full HTTP demo host, CSRF, and action flow passed locally. Real Twitch host authorization and browser operation remain unverified under G4. |
 | G9 — Live vote changes canon | **BLOCKED** | Only local/synthetic vote flow is covered. Demonstrate real channel votes and one committed canonical result. |
 | G10 — OBS overlay visually verified | **BLOCKED** | No browser/OBS access. Record the live 1920×1080 source with actual personas, vote totals and branch transition. |
-| G11 — Codex implementation and session ID | **BLOCKED** | Codex changes were made, but primary-thread `/status` ID was not available and Git commits could not be written. Capture `/status` and create/verify commits in a writable checkout. |
+| G11 — Codex implementation and session ID | **BLOCKED** | Codex changes and local code/test commit `144e3a3849ace53325211ecd5b77549fdc73ba1e` are present, but primary-thread `/status` ID was unavailable. Capture the genuine ID using `/status`; no substitute is acceptable. |
 | G12 — ECC workflow applied | **PASS (skills only)** | ECC TDD/security/test-collaboration/verification guidance was applied. Native plugin was unavailable (`installed: []`); do not claim plugin execution. |
-| G13 — Repository complete and judge-accessible | **BLOCKED** | GitHub remote is configured; latest changes are uncommitted/unpushed and remote accessibility was not externally checked. Commit/push from a writable checkout and verify judge access. |
+| G13 — Repository complete and judge-accessible | **BLOCKED** | Local code/test commit exists and the GitHub remote is configured, but no push was performed and public/judge accessibility was not externally checked. Push the reviewed commits and verify judge access. |
 | G14 — YouTube demo ready/accessible | **FAIL** | No video exists. Record and publish a real Twitch/Codex demonstration under three minutes, then verify the URL. |
 | G15 — Devpost completed/submitted | **FAIL** | No submission exists. Complete all required fields and verify Devpost says Submitted before the deadline. |
 
 ## Required corrective sequence
 
-1. Move the working tree to an environment with writable `.git`, browser access, and OBS if available. Preserve the two pre-existing untracked operator audit/prompt files; the clean Python 3.13 install is complete.
-2. Review this working diff, commit the Codex changes from a writable `.git`, and obtain the actual primary-session `/status` ID. Do not reuse an index-derived ID.
+1. Preserve the two pre-existing untracked operator audit/prompt files. The relevant code, tests, and reports are committed locally; obtain the actual primary-session `/status` ID. Do not reuse an index-derived ID.
+2. Push the reviewed local commits from an authorized environment and verify judge access. No push is claimed here.
 3. Preserve the full-suite evidence; current Ruff, format, mypy, compile, dependency consistency, pip-audit, and Bandit Medium/High checks pass. Run Trivy/Gitleaks and an independent security review.
 4. Complete real Twitch host OAuth, EventSub chat, two viewer personas, live votes, persistence/restart, and one real AI generation. The current configured model returns empty assistant content; correct the provider/model response contract first. Keep demo and live evidence distinct.
 5. Verify the real overlay in browser/OBS, record the required video, verify repository access, and submit the Devpost entry.
@@ -68,4 +68,4 @@ Final `doctor --live` results: Twitch OAuth API **BLOCKED** (no encrypted host t
 
 **PRODUCTION READY: NO**
 
-Production readiness remains NO: Twitch OAuth/EventSub and model operation are not verified, no production deployment or independent security assessment exists, and cooldown coordination is process-local. Credentials flagged by the prior audit must be rotated before public release. The full local HTTP test suite passed outside the sandbox; that test-runner limitation is not a product blocker.
+Production readiness remains NO: Twitch OAuth/EventSub and model operation are not verified, no production deployment or independent security assessment exists, and cooldown coordination is process-local. Credentials flagged by the prior audit must be rotated before public release. The full local HTTP test suite passed outside the sandbox; that test-runner limitation is not a product blocker. The code/test changes are committed locally as `144e3a3849ace53325211ecd5b77549fdc73ba1e`, with no remote push.
