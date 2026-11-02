@@ -132,6 +132,7 @@ The current `.env` values were not printed and no live request was made. The aud
 - Added tests for setting persistence, access/CSRF, HTML escaping and public redaction, provider schema, EventSub routing, send success/failure, throttling, and bounded inbox storage. Mocked transport proves local logic only.
 - Live health immediately before the new-code restart recorded 17 notifications, 7 accepted commands, 9 ignored, 1 invalid, and 8 Twitch-confirmed sends. The broadcaster account sent these messages; no second viewer, live vote, or AI-generated chat reply is evidenced.
 - Removed five obsolete walkthrough/planning files at the operator's request. The two untracked operator prompt/audit files remain unchanged.
+- Committed implementation and tests locally as `5e33a5ed201e98c061447f2a3497c0387d59f3de`; restarted the live app from that commit. The remote has not yet received it, and no CI run covers this SHA.
 
 ## Nov 2 EventSub chat delivery repair
 

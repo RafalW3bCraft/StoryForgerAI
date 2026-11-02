@@ -1,6 +1,6 @@
 # AI StoryForge release gate report
 
-**Assessment date:** November 2, 2026 (latest live evidence 10:44 UTC; local code verification continued afterward)
+**Assessment date:** November 2, 2026 (latest live smoke check 11:00 UTC)
 
 **Audited baseline:** `44fa0f4b33804826c78947ac781799a13f7f3940` on `main`
 
@@ -12,9 +12,11 @@
 
 **Latest live chat evidence:** after correcting Twitch's EventSub `notification` type, a real health snapshot at 10:44 UTC showed 17 received messages, 7 accepted commands, 9 ignored, 1 invalid, and 8 replies confirmed by Twitch (`is_sent=true`), with zero processing/send errors or drops. The operator was chatting from the broadcaster account, so this does not prove a second viewer persona or voting. The host inbox and AI responder below are new local changes and need a restart/new message before their live UI can be exercised. No real AI chat response is claimed.
 
-**Current source state:** local branch HEAD is `22a2ef4688ecbc451c394c4c7a27f529d818d4cd`; the host inbox, AI reply control, docs cleanup, and latest tests are uncommitted and not yet present on GitHub. The last verified remote CI remains run `41420537063` on `9e6a514b951aa81b0155b88f619c52c11f4255e9`.
+**Restarted app smoke check:** at 11:00 UTC `/health` returned `LIVE_TWITCH`, `eventsub_subscribed=true`, `chat_reply_status=READY`, and `ai_last_generation=VERIFIED`. Counters are zero in the fresh process. A no-cookie request to `/host/chat` returned 403 and `/overlay` returned HTTP 200 HTML. A new real chat message is required to verify the new inbox with live data; no AI-generated Twitch reply is claimed.
 
-**Remote comparison:** `git fetch --prune origin` succeeded; `origin/main` matched the baseline SHA.
+**Current source state:** implementation/test commit `5e33a5ed201e98c061447f2a3497c0387d59f3de` is on local `main`; the evidence-document follow-up is being committed separately. Latest fetched `origin/main` is `e4c526934fc529d7e9d96cab3560530c874f7dd3`; neither local commit is pushed yet. The last verified remote CI remains run `41420537063` on `9e6a514b951aa81b0155b88f619c52c11f4255e9`.
+
+**Remote comparison:** `git fetch --prune origin` succeeded; latest fetched `origin/main` is `e4c526934fc529d7e9d96cab3560530c874f7dd3`. Local `main` is ahead by the EventSub fix and host inbox commits; current CI on `e4c526…` has not been independently checked.
 
 **Decision:** **NOT READY** for hackathon submission or production.
 
@@ -33,9 +35,9 @@ This report supersedes older release decisions in the dated records below. The i
 | Real Twitch chat | PASS for broadcaster receive/reply | Live health at 10:44 UTC: 17 notifications, 7 accepted, 9 ignored, 1 invalid, 8 Twitch-confirmed replies; zero processing errors, send failures, or drops. Two-viewer persona/vote behavior remains unverified. |
 | AI provider | PASS, live probe | A real configured-model response passed `NarrativeProposal` validation. Prompt now specifies an exact JSON structure with two or three plain-string choices. |
 | Story persistence and host approval | PARTIAL | Read-only SQLite check after live chat: 1 broadcaster/host persona, 4 durable chat receipts, 0 votes, story stage `REVIEW`, and four AI-provenance canonical nodes. The broadcaster's `!join` reuses the host identity; a second viewer is needed to verify a distinct viewer persona and voting. |
-| Browser and OBS | PARTIAL | New Host Studio inbox and CSRF-protected AI toggle pass HTTP tests; chat markup is escaped and excluded from `/health` and `/overlay`. No visual browser/OBS capture at 1920×1080 exists. |
+| Browser and OBS | PARTIAL | Host inbox and CSRF-protected AI toggle pass HTTP tests; live app returns 403 to unauthenticated `/host/chat` and 200 to `/overlay`. Chat markup is escaped and excluded from `/health` and `/overlay`. No authenticated browser or visual OBS capture at 1920×1080 exists. |
 | Security/dependency checks | PARTIAL PASS | pip-audit found no known vulnerabilities among audited dependencies; Bandit reported no Medium/High findings. A high-confidence credential-signature scan of all 6 Git commits found 0 matches; `.env` is ignored and no `.env`/database file is tracked. Gitleaks, Trivy, and an independent security review are unavailable/not run. |
-| Git source and CI | PASS | Public repository page HTTP 200; GitHub API says public; latest `origin/main` at evidence cutoff was `9e6a514…`. Actions run `41420537063` succeeded on that SHA for Python 3.12 and 3.13. |
+| Git source and CI | PARTIAL | Public repository and earlier CI are verified; run `41420537063` passed on `9e6a514…` for Python 3.12/3.13. Fetched `origin/main` is now `e4c526…`; its CI result is not checked, and local commit `5e33a5e…` has no remote CI yet. |
 | Codex contribution | PARTIAL | This Codex pass made material code, regression-test, workflow and documentation changes. The primary-thread `/status` ID is not available to this tool interface and is still required. |
 | ECC | PARTIAL, guidance only | Earlier documented ECC skill guidance was applied as recorded in `docs/ECC_WORKFLOW.md`; this active environment did not provide the native ECC plugin. No plugin execution is claimed. |
 | New-project eligibility | BLOCKED / organizer interpretation needed | The repository's first commit falls in the event period, but the StoryForge MVP predates this Codex pass. A commit timestamp alone does not establish that the project was newly created during the submission window. |

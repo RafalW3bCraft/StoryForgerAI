@@ -6,9 +6,11 @@ At 10:44 UTC, immediately before preparing the new host inbox build for restart,
 
 Implemented locally after that live snapshot: a `/host/chat` page that refreshes every three seconds, shows a bounded 30-message in-memory transcript and reply status, and is restricted to the host role; a CSRF-protected Host Studio toggle for AI replies to ordinary chat, off by default; validated short replies through the configured AI provider; and global queue pacing plus a six-per-minute AI cap. Raw chat stays out of `/health`, SQLite, logs, and the public OBS overlay. The toggle warns that message text goes to the configured provider. Local tests cover the responder, opt-in, failure/rate-limit handling, private access, escaping and overlay isolation; these mocks do not prove live AI replies.
 
-Removed five stale/redundant tracked walkthrough/planning files: the three files under `submission/`, `docs/JUDGE_TESTING.md`, and `docs/IMPLEMENTATION_PLAN.md`. The two pre-existing untracked operator audit/prompt files remain untouched. At this update, code/docs/test changes are local and not yet pushed; the final commit SHA must be recorded after commit.
+The implementation and test changes are committed locally as `5e33a5ed201e98c061447f2a3497c0387d59f3de` (`Add host chat inbox and opt-in AI replies`). StoryForge was restarted from this commit at `http://localhost:8000`. At 11:00 UTC, `/health` returned `LIVE_TWITCH`, an active EventSub subscription, `chat_reply_status=READY`, `ai_provider=CONFIGURED`, and `ai_last_generation=VERIFIED`; counters were zero in the fresh process. Read-only HTTP checks returned 403 for unauthenticated `/host/chat` and 200 HTML for `/overlay`. The inbox still needs a new live message to populate; EventSub does not replay earlier messages. The authenticated browser inbox and any AI-generated Twitch reply have not yet been observed.
 
-**Evidence captured:** 2026-11-02 through 10:48 UTC; the prior 10:18 snapshot below is retained as historical evidence.
+Removed five stale/redundant tracked walkthrough/planning files: the three files under `submission/`, `docs/JUDGE_TESTING.md`, and `docs/IMPLEMENTATION_PLAN.md`. The two pre-existing untracked operator audit/prompt files remain untouched. The implementation commit and documentation follow-up are local and not yet pushed. The latest fetched `origin/main` is `e4c526934fc529d7e9d96cab3560530c874f7dd3`.
+
+**Evidence captured:** 2026-11-02 through 11:00 UTC; the prior 10:18 snapshot below is retained as historical evidence.
 
 **Working directory:** `/mnt/hostname/ai-storyforge`
 
@@ -20,7 +22,7 @@ Removed five stale/redundant tracked walkthrough/planning files: the three files
 
 **Published release snapshot:** `4ef8e3ea16a0562df9a66e1b42ece05242d48449`. GitHub API and public repository page both returned HTTP 200; repository visibility is public; `git ls-remote origin main` matched the SHA. Actions run `41419869542` passed on that SHA for both Python 3.12 and 3.13. The two operator-owned untracked files remain untouched.
 
-The published follow-up advanced `main` to `9e6a514b951aa81b0155b88f619c52c11f4255e9`; later `origin/main` is `e4c526934fc529d7e9d96cab3560530c874f7dd3`. GitHub Actions run [`41420537063`](https://github.com/RafalW3bCraft/StoryForgerAI/actions/runs/41420537063) passed on `9e6a514…` for Python 3.12 and 3.13. Local HEAD `22a2ef4…` fixed the EventSub discriminator; current uncommitted source adds the host inbox and opt-in AI replies. These current changes have not been pushed or run in GitHub Actions.
+The published follow-up advanced `main` to `9e6a514b951aa81b0155b88f619c52c11f4255e9`; later `origin/main` is `e4c526934fc529d7e9d96cab3560530c874f7dd3`. GitHub Actions run [`41420537063`](https://github.com/RafalW3bCraft/StoryForgerAI/actions/runs/41420537063) passed on `9e6a514…` for Python 3.12 and 3.13. Local HEAD `5e33a5e…` contains the EventSub fix and host inbox/AI reply feature. These current changes have not been pushed or run in GitHub Actions.
 
 The operator's pre-existing `StoryForgerAI_Codex_ECC_Finalization_Prompt.md` and `StoryForgerAI_Verified_Audit_2026-11-01.md` files were preserved and excluded from engineering staging. No secrets or database files were intentionally read into output or added to Git.
 
