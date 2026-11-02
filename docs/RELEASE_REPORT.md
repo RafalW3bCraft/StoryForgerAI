@@ -1,6 +1,6 @@
 # AI StoryForge release gate report
 
-**Assessment date:** November 2, 2026 (latest live smoke check 11:00 UTC)
+**Assessment date:** November 2, 2026 (latest live chat check 11:45 UTC)
 
 **Audited baseline:** `44fa0f4b33804826c78947ac781799a13f7f3940` on `main`
 
@@ -10,13 +10,15 @@
 
 **Latest verified main at 09:26 UTC:** `9e6a514b951aa81b0155b88f619c52c11f4255e9`, documentation-only after the release snapshot above. GitHub Actions run [`41420537063`](https://github.com/RafalW3bCraft/StoryForgerAI/actions/runs/41420537063) passed on that exact SHA for both Python 3.12 and 3.13.
 
-**Latest live chat evidence:** after correcting Twitch's EventSub `notification` type, a real health snapshot at 10:44 UTC showed 17 received messages, 7 accepted commands, 9 ignored, 1 invalid, and 8 replies confirmed by Twitch (`is_sent=true`), with zero processing/send errors or drops. The operator was chatting from the broadcaster account, so this does not prove a second viewer persona or voting. The host inbox and AI responder below are new local changes and need a restart/new message before their live UI can be exercised. No real AI chat response is claimed.
+**Earlier live chat evidence:** after correcting Twitch's EventSub `notification` type, a real health snapshot at 10:44 UTC showed 17 received messages, 7 accepted commands, 9 ignored, 1 invalid, and 8 replies confirmed by Twitch (`is_sent=true`), with zero processing/send errors or drops. The operator was chatting from the broadcaster account, so this does not prove a second viewer persona or voting. The subsequent 11:45 UTC check below verifies incoming messages and fixed acknowledgements after restarting with the inbox implementation. No real AI chat response is claimed.
 
 **Restarted app smoke check:** at 11:00 UTC `/health` returned `LIVE_TWITCH`, `eventsub_subscribed=true`, `chat_reply_status=READY`, and `ai_last_generation=VERIFIED`. Counters are zero in the fresh process. A no-cookie request to `/host/chat` returned 403 and `/overlay` returned HTTP 200 HTML. A new real chat message is required to verify the new inbox with live data; no AI-generated Twitch reply is claimed.
 
-**Current source state:** implementation/test commit `5e33a5ed201e98c061447f2a3497c0387d59f3de` is on local `main`; the evidence-document follow-up is being committed separately. Latest fetched `origin/main` is `e4c526934fc529d7e9d96cab3560530c874f7dd3`; neither local commit is pushed yet. The last verified remote CI remains run `41420537063` on `9e6a514b951aa81b0155b88f619c52c11f4255e9`.
+**Follow-up live chat check:** at 11:45 UTC `/health` showed 8 notifications received since restart, 4 accepted commands, 4 ignored messages, and 4 Twitch-confirmed replies sent (`is_sent=true`); errors, failures, drops, and AI reply counters remained zero. This confirms real incoming chat and fixed command acknowledgements. The health endpoint intentionally omits raw chat; view message text at `/host/chat` in the broadcaster's authenticated browser. AI replies to ordinary messages remain off until enabled in Host Studio, and no AI chat reply is claimed.
 
-**Remote comparison:** `git fetch --prune origin` succeeded; latest fetched `origin/main` is `e4c526934fc529d7e9d96cab3560530c874f7dd3`. Local `main` is ahead by the EventSub fix and host inbox commits; current CI on `e4c526…` has not been independently checked.
+**Current source state:** implementation/test commit `5e33a5ed201e98c061447f2a3497c0387d59f3de` and evidence commit `18b1f6c8ec8b7752a1c04b5074ef47b3665a12e8` are local on `main`. The EventSub fix is in preceding local commit `22a2ef4…`. Latest fetched `origin/main` is `e4c526934fc529d7e9d96cab3560530c874f7dd3`; these three local commits are not pushed yet. The last verified remote CI remains run `41420537063` on `9e6a514b951aa81b0155b88f619c52c11f4255e9`.
+
+**Remote comparison:** `git fetch --prune origin` succeeded; latest fetched `origin/main` is `e4c526934fc529d7e9d96cab3560530c874f7dd3`. Local `main` is three commits ahead (EventSub fix, host inbox/AI reply feature, and live evidence); these commits are not pushed yet. CI on `e4c526…` has not been independently checked.
 
 **Decision:** **NOT READY** for hackathon submission or production.
 
