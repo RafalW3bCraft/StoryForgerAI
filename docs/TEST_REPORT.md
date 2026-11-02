@@ -1,29 +1,31 @@
 # Test and verification report
 
 **Run date:** 2026-11-02 UTC
-**Checkout:** `main`; tested code and test commit `144e3a3849ace53325211ecd5b77549fdc73ba1e` (documentation follow-up follows this commit)
+**Checkout:** `main`; latest verified source/test commit `5c6b54946fbcdef2b3573618bf0b55070ac8581b`
 **Runtime:** Linux, Python 3.14.7. The project declares Python 3.12+.
 **Key installed versions:** FastAPI 0.162.0, Starlette 1.10.0, SQLAlchemy 2.1.6, Pydantic 2.14.2, cryptography 50.0.2, httpx 0.28.1, httpx2 2.16.0 (installed in the environment but no longer required by project tests), websockets 17.4, pytest 9.2.0, pytest-cov 7.1.0, Ruff 0.17.3, mypy 2.4.1.
 
 ## Nov 2 follow-up: OAuth origin and runtime diagnostics
 
-The starting checkout was `d6aa6ff7fce8ce2b82bcba05d6c42cb183d1a874`. The relevant application, test, and evidence changes were committed locally as `144e3a3849ace53325211ecd5b77549fdc73ba1e`; the two operator-provided untracked audit/prompt files were left untouched. Python 3.14.7 was used for the checks below.
+The starting checkout was `d6aa6ff7fce8ce2b82bcba05d6c42cb183d1a874`. Prior fixes are committed locally; the two operator-provided untracked audit/prompt files remain untouched. The AI fix and regression are in commit `5c6b54946fbcdef2b3573618bf0b55070ac8581b`. Python 3.14.7 was used for the checks below.
 
 | Check | Current result | Evidence |
 |---|---|---|
 | OAuth origin regressions | **PASS** | `.venv/bin/python -m pytest -q tests/test_app.py -k 'all_off_origin or oauth_token_exchange_failure or twitch_oauth_login or host_oauth_callback or app_runner'`: **6 passed, 17 deselected**. |
-| Full regression suite | **PASS** | `timeout 45s .venv/bin/python -m pytest -q -o faulthandler_timeout=10` outside the sandbox: **68 passed in 3.35s**. |
-| Full coverage | **PASS** | `timeout 45s .venv/bin/python -m pytest --cov=storyforge --cov-report=term-missing -q -W error::ResourceWarning` outside the sandbox: **68 passed**, **84% total coverage**, no ResourceWarnings. |
+| Full regression suite | **PASS** | `timeout 45s .venv/bin/python -m pytest -q -o faulthandler_timeout=10` outside the sandbox after the AI fix: **69 passed in 5.88s**. |
+| Full coverage | **PASS** | `timeout 45s .venv/bin/python -m pytest --cov=storyforge --cov-report=term-missing -q -W error::ResourceWarning` outside the sandbox: **69 passed**, **84% total coverage**, no ResourceWarnings. |
+| AI integration and diagnostic tests | **PASS** | `.venv/bin/python -m pytest -q tests/test_integrations.py -k ai_provider`: **4 passed, 11 deselected**; `.venv/bin/python -m pytest -q tests/test_diagnostics.py -k live_ai_diagnostic`: **4 passed, 10 deselected**. |
 | Sandbox-bound test run | **BLOCKED (environment only)** | A sandbox-bound run stalls when FastAPI dispatches synchronous routes through AnyIO's worker queue. The same full suite passes outside the sandbox; no application handler was moved onto the event loop. |
 | Ruff, formatting, mypy, compileall, pip check | **PASS** | Final runs passed in the Python 3.14.7 environment after all source/test changes. |
 | Dependency vulnerability audit | **PASS, dependencies only** | `pip-audit 2.10.1` initially found seven advisories in `cryptography 47.0.0`; the dependency floor was raised to `50.0.2`. Reruns against the clean Python 3.13 install and current `.venv` report no known vulnerabilities. The local `ai-storyforge` package is skipped because it is not published on PyPI. |
 | Bandit source scan | **PASS for Medium/High** | Bandit 1.9.4 reported zero Medium/High findings. Its 13 Low findings were reviewed: deterministic cosmetic randomness, the live-rejected demo sentinel, diagnostic field/help labels, and a fixed-argv subprocess with no shell and a timeout. The two Medium SQL-string findings from the first run were removed by using a fixed-name main-database table inside a rolled-back transaction. |
 | Redacted local doctor | **PASS, local only** | All 13 recognized variable names and roles were printed without values; each local validation passed and the SQLite write probe passed. |
-| Twitch authorization endpoint | **BLOCKED** | One read-only request built from local `TWITCH_CLIENT_ID` and `APP_BASE_URL/auth/callback` received HTTP 302 (`text/html`). No browser grant, code exchange, or token was requested; this response alone does not prove broadcaster authentication. |
-| Redacted live probes | **BLOCKED** | Twitch probe found no encrypted host token; model endpoint returned an empty assistant-content field; the running app `/health` endpoint and SQLite snapshot verified. EventSub and real chat remain unverified. |
+| Twitch OAuth | **PASS** | `.venv/bin/python -m storyforge doctor --probe twitch`: **VERIFIED (host token and broadcaster identity)**. The current `APP_BASE_URL` is `http://localhost:8000`; the login route's generated `redirect_uri` was verified as `http://localhost:8000/auth/callback`. |
+| AI provider | **PASS** | `.venv/bin/python -m storyforge doctor --probe ai`: **VERIFIED (live response passed `NarrativeProposal` validation)** after the provider-specific fix. |
+| Live app health | **PASS** | `GET http://localhost:8000/health`: HTTP 200, `twitch=LIVE_TWITCH`, `eventsub_subscribed=true`; `last_real_chat_event_seen=false` and `ai_last_generation=NOT GENERATED`. A saved Host Studio proposal is still pending the operator's UI retry. |
 | Clean Python 3.13 dependency install | **PASS** | Installed `.[dev]` into `/tmp/storyforge-py313-venv`; `pip check` passed. The environment's event-loop/thread bridge still timed out independently of StoryForge. |
 
-The prior OAuth failure was consistent with starting from one loopback hostname and returning to another, which gives the browser separate cookies. `ConfiguredOriginMiddleware` now redirects every off-origin HTTP request to the fixed `APP_BASE_URL` before session handling, preserving path and query without trusting the Host header. Callback state mismatches are rejected without exchanging the code and return the browser to app home, not a JSON detail response. Token-exchange failures now show only a safe HTTP status/category and log no code, response body, or credential. Access logging remains disabled. The user's latest startup output prints `http://127.0.0.1:8000`; the Twitch callback derived from that value is `http://127.0.0.1:8000/auth/callback`.
+The prior OAuth issue included an HTTPS request to a plain-HTTP listener and a stale running process using `127.0.0.1` while `.env` now specifies `localhost`. The app was restarted from the current configuration; it prints `http://localhost:8000`. The registered and generated callback is `http://localhost:8000/auth/callback`. `ConfiguredOriginMiddleware` redirects off-origin HTTP requests to the fixed `APP_BASE_URL`; TLS sent to this plain HTTP listener fails before ASGI and cannot be redirected. The subsequent redacted Twitch probe now verifies the encrypted host token and broadcaster identity.
 
 The earlier sandbox-bound attempt stalled in the execution host's AnyIO worker bridge. The final complete run outside that sandbox passed all 68 tests, including the three HTTP acceptance tests, so the suite is no longer blocked. StoryForge keeps synchronous SQLite handlers on FastAPI's normal worker-dispatch path.
 
@@ -31,7 +33,13 @@ The dependency audit found seven advisories in the previous `cryptography 47.0.0
 
 The first Bandit scan raised two Medium B608 findings on the diagnostic's f-string table names. The identifier came from a UUID and was not controllable by users, but the probe now uses a fixed-name main-database table inside a transaction that is rolled back, removing dynamic SQL and the findings while still testing database write access. The remaining Low findings were reviewed as false positives for this app's usage; the full scan with `--ignore-nosec` found zero Medium/High issues.
 
-`python -m storyforge doctor --live` was run with values redacted and the AI watchdog set to 60 seconds. Final results: `Twitch OAuth API: BLOCKED (no encrypted host token in local database)`, `AI provider: FAILED (assistant content field was empty)`, `Application runtime: VERIFIED (health endpoint and database-backed snapshot)`, `Twitch EventSub subscription: NOT VERIFIED`, `Last real Twitch chat event: NOT VERIFIED`, `Saved AI generation from provider: NOT GENERATED`, and `Runtime readiness: PASS`. The model response had an empty assistant-content string, so it did not pass validation or get saved. A separate read-only Twitch authorization request returned HTTP 302 (`text/html`), but no browser grant, code exchange, or broadcaster identity was tested. No real chat command or host approval is evidenced. Local diagnostics confirmed live mode, all 13 variable shapes passing, and SQLite writable; this does not inspect the Developer Console entry. The callback must exactly match `APP_BASE_URL/auth/callback`.
+An earlier pre-fix `doctor --live` run found no host token and an empty model response. That state was superseded: the current redacted `doctor --probe twitch` verifies the host token and broadcaster identity, and `doctor --probe ai` verifies a real response against `NarrativeProposal`. The running app health now reports an active Twitch connection and accepted EventSub subscription. No real chat message has been observed and no scene has yet been saved through Host Studio or host-approved.
+
+## Nov 2 follow-up: Featherless Qwen empty content
+
+The live failure reproduced as an HTTP-success response with an empty assistant `content` field. Configuration inspection, with secrets withheld, identified `api.featherless.ai/v1` and `Qwen/Qwen3.8-27B`. A bounded real request using Featherless's `chat_template_kwargs: {"enable_thinking": false}` returned non-empty output (`finish_reason=stop`, 892 content characters); the full StoryForge probe then passed `NarrativeProposal` validation. Featherless documents this switch for reasoning models in its [chat-template kwargs guide](https://featherless.ai/docs/chat-template-kwargs).
+
+Added the option only for Featherless-hosted Qwen3 model IDs; other OpenAI-compatible providers retain their original payload. The new regression failed before the fix because the request omitted `chat_template_kwargs`, then passed after the fix. Verification: AI integration tests **4 passed**, AI diagnostic tests **4 passed**, full suite **69 passed**, coverage **84%**, Ruff/format/mypy/compile passed. The app was restarted with the fix. Its health reports `ai_last_generation=NOT GENERATED`, so the next live step is to retry generation in Host Studio and verify the saved proposal is labeled `AI-GENERATED` before approval.
 
 ## Earlier automated checkpoint before the Nov 2 OAuth continuation
 
@@ -59,12 +67,12 @@ The targeted run covers OAuth callback success/state mismatch/wrong broadcaster 
 
 `python -m storyforge doctor` reported all 13 supported environment settings present and passed their local shape checks. Values were not printed or recorded. This is configuration evidence only.
 
-The final `python -m storyforge doctor --live` run produced these redacted external results:
+The latest separate redacted live probes and app health produced these results:
 
-- **Twitch OAuth API: BLOCKED** — no encrypted host token exists in the local SQLite vault; no actual OAuth callback or authenticated broadcaster was tested.
-- **AI provider: FAILED (assistant content field was empty)** — the endpoint returned no narrative text, so no proposal passed `NarrativeProposal` validation or was saved.
-- **Application runtime: VERIFIED** — the configured `/health` endpoint and SQLite-backed snapshot responded; EventSub remains **NOT VERIFIED**.
-- **EventSub chat delivery: NOT VERIFIED** — no EventSub subscription or real channel message was observed.
+- **Twitch OAuth API: VERIFIED** — the host token and configured broadcaster identity passed the redacted live doctor.
+- **AI provider: VERIFIED** — a real response passed `NarrativeProposal` validation after disabling Featherless Qwen3 thinking mode.
+- **Application runtime: VERIFIED** — `/health` returned HTTP 200; Twitch is `LIVE_TWITCH`, EventSub subscription is active, and no real message has yet been observed.
+- **Saved AI generation: NOT GENERATED** — the probe validates a real proposal but does not save it. Retry from Host Studio and confirm the saved status is `AI-GENERATED`.
 
 Mocked EventSub tests are not live evidence. No actual `!join`, `!persona scholar`, `!trait curious`, or `!vote A` was sent in a Twitch channel. No real AI scene was approved. Browser and OBS verification were unavailable.
 

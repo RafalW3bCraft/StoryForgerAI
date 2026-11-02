@@ -2,7 +2,7 @@
 
 **Date:** 2026-11-01 UTC
 **Primary Codex `/status` ID:** not captured; this execution interface does not expose the primary Codex `/status` command. Do not use a local session-index ID as a substitute.
-**Git commit:** local code/test commit `144e3a3849ace53325211ecd5b77549fdc73ba1e`; no push. Initial sandbox writes to `.git` failed, then the requested commit was created after explicit elevated filesystem approval. The two operator-provided untracked audit/prompt files remain untouched.
+**Git commit:** latest source/test commit `5c6b54946fbcdef2b3573618bf0b55070ac8581b`; no push. The two operator-provided untracked audit/prompt files remain untouched.
 **Starting revision:** `d6aa6ff` on `main`.
 
 The initial AI StoryForge MVP predates this Codex pass and was bootstrapped in its original ChatGPT/container context. This log records only the work performed in the current Codex engineering pass; it does not attribute the original MVP to Codex.
@@ -98,3 +98,11 @@ The current `.env` values were not printed and no live request was made. The aud
 - Final redacted `python -m storyforge doctor --live`: Twitch OAuth **BLOCKED** (no encrypted host token); AI **FAILED** because assistant content was empty; application runtime and database-backed snapshot **VERIFIED**; EventSub/chat **NOT VERIFIED**; saved provider generation **NOT GENERATED**. No actual `!join`, `!persona`, or `!vote` succeeded in evidence. A separate read-only Twitch authorize endpoint request returned HTTP 302, without user consent or token exchange.
 - The configured startup address is plain HTTP `http://127.0.0.1:8000`; the exact local callback is `http://127.0.0.1:8000/auth/callback`. TLS bytes sent to this plain HTTP listener can cause Uvicorn's `Invalid HTTP request received` warnings before the request reaches StoryForge. Use the printed HTTP address locally; HTTPS needs a TLS reverse proxy.
 - The genuine primary Codex `/status` session ID was unavailable. Native ECC plugin is not installed; cached ECC workflow guidance was applied and documented. Local code/test commit `144e3a3849ace53325211ecd5b77549fdc73ba1e` was created after explicit elevated filesystem approval; no push was performed. The untracked operator prompt and audit files remain untouched. No video or Devpost submission exists.
+
+## Nov 2 live AI generation repair
+
+- Reproduced the live model failure with `.venv/bin/python -m storyforge doctor --probe ai`: Featherless returned HTTP success but an empty assistant `content` field. Effective redacted model configuration identified the Featherless API and `Qwen/Qwen3.8-27B`; no API key or generated text was logged.
+- A bounded provider request with `chat_template_kwargs: {"enable_thinking": false}` returned a stopped completion with non-empty content. Featherless documents `enable_thinking` as a reasoning/template control. Added it only for Featherless-hosted Qwen3 model IDs; other OpenAI-compatible request payloads remain unchanged.
+- RED/GREEN: `test_featherless_qwen_disables_thinking_for_final_narrative` failed before the fix because the request omitted the option; after the fix it passed. The live full-prompt doctor probe now reports **AI provider: VERIFIED** with `NarrativeProposal` validation.
+- Additional live check: `.venv/bin/python -m storyforge doctor --probe twitch` reports **VERIFIED** host token and broadcaster identity. Restarted StoryForge at `http://localhost:8000`; `/health` returns 200, `LIVE_TWITCH`, and an active EventSub subscription. No real chat message has been seen; `/health` still reports `ai_last_generation=NOT GENERATED` until Host Studio saves a proposal.
+- Verification after the fix: full suite **69 passed**; coverage **84%** with `-W error::ResourceWarning`; AI integration tests **4 passed**, AI diagnostic tests **4 passed**; Ruff, format, mypy, and compileall passed. Code/test commit: `5c6b54946fbcdef2b3573618bf0b55070ac8581b`; no push.

@@ -33,7 +33,7 @@ python -m storyforge
 
 The app binds to `127.0.0.1:8000` by default and prints the exact address to open. Use the origin configured in `APP_BASE_URL`; for the `.env.example` default, open `http://127.0.0.1:8000`. `http://localhost:8000` and `http://127.0.0.1:8000` are different browser cookie origins. Every HTTP request from another origin redirects to the configured URL before session handling, so Twitch OAuth state and its cookie stay on the same origin. Callback failures return to the configured app home with a safe message instead of a JSON error page. Never expose the demo password form to the public internet.
 
-The built-in Uvicorn runner serves plain HTTP and does not terminate TLS. If it prints repeated `Invalid HTTP request received` warnings while you try to connect, open the exact `http://...` URL printed at startup; an HTTPS/TLS request sent to this HTTP port cannot reach the app's redirect handler. The Twitch registered redirect URI must exactly equal `APP_BASE_URL/auth/callback`. For the current local configuration, `APP_BASE_URL` is loopback HTTP on port 8000, so the callback URI to register is `http://127.0.0.1:8000/auth/callback`. A public HTTPS `APP_BASE_URL` requires a separately configured TLS reverse proxy; this development runner does not provide one.
+The built-in Uvicorn runner serves plain HTTP and does not terminate TLS. If it prints repeated `Invalid HTTP request received` warnings while you try to connect, open the exact `http://...` URL printed at startup; an HTTPS/TLS request sent to this HTTP port cannot reach the app's redirect handler. The Twitch registered redirect URI must exactly equal `APP_BASE_URL/auth/callback`. The sample `.env.example` uses `http://127.0.0.1:8000`; the current local `.env` uses `http://localhost:8000`, so its callback is `http://localhost:8000/auth/callback`. A public HTTPS `APP_BASE_URL` requires a separately configured TLS reverse proxy; this development runner does not provide one.
 
 ## Configuration
 
@@ -101,7 +101,7 @@ Use the supported Python 3.12+ environment and development dependencies installe
 
 ## Known limitations
 
-- Real Twitch OAuth, a real EventSub chat message, successful configured model inference, and browser/OBS visuals still require real accounts and operator verification.
+- Twitch host OAuth and a schema-valid live model response have passed redacted probes. A real EventSub chat message and Host Studio-saved/approved AI proposal still need operator verification; browser/OBS visuals also remain unverified.
 - Single-process SQLite and in-memory command cooldowns suit this MVP, not multi-worker deployment.
 - Informational chat commands do not send outbound Twitch messages.
 - The overlay refreshes the full document; no camera, voice, generated-image or other optional media feature is implemented.
