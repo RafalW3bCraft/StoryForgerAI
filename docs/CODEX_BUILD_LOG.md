@@ -122,3 +122,4 @@ The current `.env` values were not printed and no live request was made. The aud
 - Committed source/tests/CI/docs as `9a36319112e8fd83200abcc2b43c81861176d183`; committed the final evidence snapshot as `4ef8e3ea16a0562df9a66e1b42ece05242d48449`; pushed both to `origin/main`.
 - GitHub API confirms the repository is public; repository page returned HTTP 200; `git ls-remote origin main` matched `4ef8e3ea16a0562df9a66e1b42ece05242d48449`.
 - GitHub Actions run `41419869542` succeeded on that exact release snapshot for both Python 3.12 and 3.13. This workflow run does not represent real Twitch viewer traffic or OBS footage.
+- The public `main` was then advanced by a documentation-only commit to `9e6a514b951aa81b0155b88f619c52c11f4255e9`; exact `origin/main` matched. GitHub Actions run `41420537063` passed on this newer SHA for both supported Python versions.

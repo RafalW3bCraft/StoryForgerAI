@@ -16,7 +16,7 @@ AI StoryForge uses Python, FastAPI, Jinja2, CSS, SQLAlchemy, SQLite, Pydantic, H
 
 ## How Codex contributed
 
-The existing MVP predates this Codex engineering pass. In the recorded Codex work, Codex added or repaired EventSub identity and subscription validation, OAuth origin handling, live configuration checks, AI response validation, chat cooldown and replay handling, aggregate redacted diagnostics, database permission enforcement, the Python 3.12/3.13 CI workflow, regression tests, and release documentation. The public release snapshot `4ef8e3ea16a0562df9a66e1b42ece05242d48449` and a passing Actions run are verified. The actual primary-thread Codex session ID is still required before submission.
+The existing MVP predates this Codex engineering pass. In the recorded Codex work, Codex added or repaired EventSub identity and subscription validation, OAuth origin handling, live configuration checks, AI response validation, chat cooldown and replay handling, aggregate redacted diagnostics, database permission enforcement, the Python 3.12/3.13 CI workflow, regression tests, and release documentation. The latest public `main` snapshot checked at audit time was `9e6a514b951aa81b0155b88f619c52c11f4255e9`; Actions run `41420537063` passed on that SHA. The actual primary-thread Codex session ID is still required before submission.
 
 ## Verification and limitations
 

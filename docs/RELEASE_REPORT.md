@@ -8,6 +8,8 @@
 
 **Published release snapshot:** `4ef8e3ea16a0562df9a66e1b42ece05242d48449`; public GitHub API returned HTTP 200 and `private=false`, the repository page returned HTTP 200, `git ls-remote` matched this SHA, and GitHub Actions run [`41419869542`](https://github.com/RafalW3bCraft/StoryForgerAI/actions/runs/41419869542) succeeded for both Python 3.12 and 3.13 matrix jobs. Later documentation-only commits may advance `main` without changing the tested source.
 
+**Latest verified main at 09:26 UTC:** `9e6a514b951aa81b0155b88f619c52c11f4255e9`, documentation-only after the release snapshot above. GitHub Actions run [`41420537063`](https://github.com/RafalW3bCraft/StoryForgerAI/actions/runs/41420537063) passed on that exact SHA for both Python 3.12 and 3.13.
+
 **Remote comparison:** `git fetch --prune origin` succeeded; `origin/main` matched the baseline SHA.
 
 **Decision:** **NOT READY** for hackathon submission or production.
@@ -29,7 +31,7 @@ This report supersedes older release decisions in the dated records below. The i
 | Story persistence and host approval | PARTIAL | SQLite contains a canonical node with `AI` provenance and a pending AI proposal; story stage is currently `REVIEW`. Current snapshot: 1 host persona, 0 viewer personas, 7 revisions, 0 chat receipts, 0 votes. The current proposal still needs host approval; no live viewer vote can be counted. |
 | Browser and OBS | BLOCKED | HTTP route checks were previously successful, but this session has no real browser/OBS capture. No 1920×1080 OBS acceptance evidence or video exists. |
 | Security/dependency checks | PARTIAL PASS | pip-audit found no known vulnerabilities among audited dependencies; Bandit reported no Medium/High findings. A high-confidence credential-signature scan of all 6 Git commits found 0 matches; `.env` is ignored and no `.env`/database file is tracked. Gitleaks, Trivy, and an independent security review are unavailable/not run. |
-| Git source and CI | PASS | Public repository page HTTP 200; GitHub API says public; `origin/main` matched published SHA `4ef8e3e…`. Actions run `41419869542` succeeded on that SHA for Python 3.12 and 3.13. |
+| Git source and CI | PASS | Public repository page HTTP 200; GitHub API says public; latest `origin/main` at evidence cutoff was `9e6a514…`. Actions run `41420537063` succeeded on that SHA for Python 3.12 and 3.13. |
 | Codex contribution | PARTIAL | This Codex pass made material code, regression-test, workflow and documentation changes. The primary-thread `/status` ID is not available to this tool interface and is still required. |
 | ECC | PARTIAL, guidance only | Earlier documented ECC skill guidance was applied as recorded in `docs/ECC_WORKFLOW.md`; this active environment did not provide the native ECC plugin. No plugin execution is claimed. |
 | New-project eligibility | BLOCKED / organizer interpretation needed | The repository's first commit falls in the event period, but the StoryForge MVP predates this Codex pass. A commit timestamp alone does not establish that the project was newly created during the submission window. |
@@ -50,7 +52,7 @@ This report supersedes older release decisions in the dated records below. The i
 
 | Gate | Status | Cause and evidence needed to close |
 |---|---|---|
-| A — Install, tests, type/lint/dependencies | PASS | Python 3.13.15 clean dev install and full checks recorded in `docs/TEST_REPORT.md`. Actions run `41419869542` passed on published SHA `4ef8e3e…` for Python 3.12 and 3.13. |
+| A — Install, tests, type/lint/dependencies | PASS | Python 3.13.15 clean dev install and full checks recorded in `docs/TEST_REPORT.md`. Actions run `41420537063` passed on latest verified main `9e6a514…` for Python 3.12 and 3.13. |
 | B — 13 runtime variables and live probes | PARTIAL | Redacted local check passed. Twitch host token/identity, EventSub subscription, and AI response are externally verified. A fresh OAuth exchange to validate `TWITCH_CLIENT_SECRET`, actual redirect registration, and full production database backup/restore are not verified. |
 | C — Real Twitch chat and voting | BLOCKED | Subscription active but no actual notification or command reached the app. Need two real viewers, durable persona revisions and receipts, votes, and canonical transition. |
 | D — AI story end to end | PARTIAL | Real model response and persisted AI provenance are evidenced; current AI proposal is pending in `REVIEW`. Host approval, real vote resolution, second-scene continuity, and cross-restart live workflow remain incomplete. |
