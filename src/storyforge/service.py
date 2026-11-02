@@ -18,6 +18,7 @@ from .models import (
     EventReceipt,
     Persona,
     PersonaRevision,
+    RuntimeSetting,
     SceneProposal,
     StoryNode,
     StorySession,
@@ -79,6 +80,25 @@ class StoryService:
         self._last_contribution_command: dict[str, float] = {}
         self._last_chat_command: dict[str, float] = {}
         self._recent_rejected_events: OrderedDict[str, float] = OrderedDict()
+
+    def ai_chat_replies_enabled(self) -> bool:
+        with self.sessions() as db:
+            setting = db.get(RuntimeSetting, "ai_chat_replies_enabled")
+            return setting is not None and setting.value == "true"
+
+    def set_ai_chat_replies_enabled(self, enabled: bool) -> None:
+        if not isinstance(enabled, bool):
+            raise TypeError("AI chat reply preference must be boolean")
+        with self.sessions.begin() as db:
+            setting = db.get(RuntimeSetting, "ai_chat_replies_enabled")
+            if setting is None:
+                db.add(
+                    RuntimeSetting(
+                        key="ai_chat_replies_enabled", value="true" if enabled else "false"
+                    )
+                )
+            else:
+                setting.value = "true" if enabled else "false"
 
     def _active(self, db: Session) -> StorySession | None:
         return db.scalar(select(StorySession).order_by(StorySession.id.desc()).limit(1))

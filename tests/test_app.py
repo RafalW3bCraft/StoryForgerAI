@@ -214,6 +214,110 @@ async def test_host_authorization_and_csrf(settings):
 
 
 @pytest.mark.asyncio
+async def test_host_chat_inbox_is_private_escaped_and_not_exposed_by_health(settings):
+    app = create_app(settings)
+    app.state.connector.record_chat_message(
+        "private-message-id", "<viewer>", "<script>alert('chat')</script> hello"
+    )
+    async with _client(app, settings.base_url) as client:
+        assert (await client.get("/host/chat")).status_code == 403
+        response, _csrf = await _login(client)
+        assert response.status_code == 303
+
+        inbox = await client.get("/host/chat")
+        assert inbox.status_code == 200
+        assert "Live Twitch Chat" in inbox.text
+        assert '<meta http-equiv="refresh" content="3">' in inbox.text
+        assert "&lt;viewer&gt;" in inbox.text
+        assert "&lt;script&gt;alert(&#39;chat&#39;)&lt;/script&gt; hello" in inbox.text
+        assert "<script>alert(" not in inbox.text
+
+        overlay = await client.get("/overlay")
+        assert overlay.status_code == 200
+        assert "alert('chat')" not in overlay.text
+
+        health = await client.get("/health")
+        assert health.status_code == 200
+        assert "alert('chat')" not in health.text
+        assert "private-message-id" not in health.text
+
+
+@pytest.mark.asyncio
+async def test_ai_chat_control_requires_host_csrf_and_live_provider(settings):
+    app = create_app(settings)
+    async with _client(app, settings.base_url) as client:
+        assert (
+            await client.post("/host/chat-settings", data={"enabled": "true"})
+        ).status_code == 403
+        _response, csrf = await _login(client)
+        host_page = await client.get("/host")
+        assert "Enable automatic AI replies to ordinary chat" in host_page.text
+        assert "disabled" in host_page.text
+
+        response = await client.post(
+            "/host/chat-settings",
+            data={"csrf_token": csrf, "enabled": "true"},
+            follow_redirects=True,
+        )
+        assert response.status_code == 200
+        assert "require a configured live AI provider" in response.text
+        assert app.state.service.ai_chat_replies_enabled() is False
+
+        response = await client.post(
+            "/host/chat-settings", data={"csrf_token": csrf}, follow_redirects=True
+        )
+        assert response.status_code == 200
+        assert "AI chat replies disabled" in response.text
+
+
+def test_live_host_can_enable_ai_chat_replies_with_valid_csrf(tmp_path):
+    from cryptography.fernet import Fernet
+    from starlette.requests import Request
+
+    from storyforge.config import Settings
+
+    settings = Settings(
+        mode="live",
+        database=str(tmp_path / "live-chat-setting.db"),
+        secret="s" * 48,
+        twitch_client_id="client-id",
+        twitch_client_secret="client-secret",
+        twitch_broadcaster_id="111",
+        twitch_reader_id="111",
+        token_key=Fernet.generate_key().decode(),
+        ai_base_url="https://provider.test/v1",
+        ai_api_key="fake-provider-key",
+        ai_model="test-model",
+    )
+    app = create_app(settings)
+    route = next(
+        route for route in app.routes if getattr(route, "path", None) == "/host/chat-settings"
+    )
+    request = Request(
+        {
+            "type": "http",
+            "asgi": {"version": "3.0", "spec_version": "2.3"},
+            "http_version": "1.1",
+            "server": ("localhost", 8000),
+            "client": ("127.0.0.1", 1234),
+            "scheme": "http",
+            "method": "POST",
+            "root_path": "",
+            "path": "/host/chat-settings",
+            "raw_path": b"/host/chat-settings",
+            "query_string": b"",
+            "headers": [(b"host", b"localhost:8000")],
+            "session": {"role": "host", "csrf": "valid-csrf"},
+        }
+    )
+
+    response = route.endpoint(request, csrf_token="valid-csrf", enabled=True)
+
+    assert response.status_code == 303
+    assert app.state.service.ai_chat_replies_enabled() is True
+
+
+@pytest.mark.asyncio
 async def test_end_to_end_web_demo(settings):
     app = create_app(settings)
     async with _client(app, settings.base_url) as c:

@@ -157,3 +157,11 @@ class AuditEvent(Base):
     action: Mapped[str] = mapped_column(String(64))
     details: Mapped[str] = mapped_column(String(300))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class RuntimeSetting(Base):
+    """Small durable operator preferences; secrets never belong in this table."""
+
+    __tablename__ = "runtime_settings"
+    key: Mapped[str] = mapped_column(String(80), primary_key=True)
+    value: Mapped[str] = mapped_column(String(200))

@@ -2,7 +2,7 @@
 
 | Threat | Boundary | Controls implemented | Remaining risk |
 |---|---|---|---|
-| Viewer impersonation | Twitch → Persona | Sender Twitch ID from EventSub; browser profile binds OAuth identity | Stored host OAuth identity is verified, but no actual viewer chat event has yet been observed |
+| Viewer impersonation | Twitch → Persona | Sender Twitch ID from EventSub; browser profile binds OAuth identity | Broadcaster chat has been observed; a second viewer account and distinct viewer persona still need verification |
 | Unauthenticated host actions | Browser → Host Studio | Signed session role; host ID checks; CSRF fields; demo login checks both loopback client IP and loopback Host | Demo password attempts are not separately rate limited; live host access must use Twitch OAuth |
 | Stored XSS | Chat → UI | Jinja2 autoescaping; text length bounds; no authored scripts; SVG is generated from bounded attributes | Security review and browser penetration test pending |
 | OAuth state substitution or lost session cookie | Twitch → Callback | Random state stored in signed session; pure ASGI middleware redirects every off-origin HTTP request to fixed `APP_BASE_URL` before session handling; callback errors return to app home and mismatched state is rejected before token exchange | Stored host identity came from an earlier authorization, but a fresh authorization-code exchange with the current client secret and exact Twitch Console registration is unverified; reverse-proxy deployment is also unverified |
@@ -12,6 +12,7 @@
 | AI cost exhaustion | Host → Provider | Host-authenticated generation; timeouts; app-instance lock prevents concurrent duplicate requests; demo mode cannot implicitly enable external AI | No explicit per-day token/currency budget; lock is process-local |
 | Story-state corruption | Host/Viewer → SQLite | Transactional writes, validated stages, persisted pause origin, partial unique open-round index, preserved fork history | SQLite concurrency and crash injection tests incomplete |
 | Privacy overcollection | Persona → Storage | Stores fictional profile and stable Twitch ID, no raw media; deletion pseudonymizes | Retention schedule and full privacy impact assessment pending |
+| Chat text disclosure / model abuse | Twitch → host inbox and optional AI provider | Bounded volatile inbox is host-only and Jinja-escaped; raw text is excluded from `/health`, OBS, logs, and SQLite; AI replies are opt-in, rate-limited, schema-validated, and treat viewer text as untrusted | Enabling AI replies sends ordinary viewer text to the configured provider; provider retention/moderation terms are operator responsibilities; no real AI chat reply has been verified |
 | OBS privilege escalation | Public overlay → Host | Overlay GET only; host POST actions require authenticated session + CSRF | Needs deployed CSP assessment |
 | Host replay after logout | Browser cookie | Logout clears signed session, secure cookies behind HTTPS | Session revocation beyond logout not implemented |
 | Secrets in diagnostic representations | Python `Settings` object | Secret fields have `repr=False`; sentinel regression checks representation redaction | A configured secret appeared in a failed pytest representation before the fix; rotate it before release |

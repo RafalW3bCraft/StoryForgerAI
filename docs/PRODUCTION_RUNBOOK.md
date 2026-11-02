@@ -25,13 +25,15 @@
 
    Open exactly the URL printed at startup. This runner serves HTTP on loopback; do not switch to HTTPS. In Twitch's developer console, the redirect URI must exactly match `APP_BASE_URL/auth/callback`. `doctor --live` makes a real provider request, may incur model cost, may refresh the encrypted host token, and does not prove chat delivery.
 
-5. Host signs in as the configured broadcaster and checks `/health` for `twitch=LIVE_TWITCH`, `eventsub_subscribed=true`, and the expected AI provenance. Subscription status alone is not evidence of a received chat message. The redacted counters record received notifications and aggregate accepted/ignored/cooldown/invalid/duplicate/error outcomes; they expose no user IDs or message text.
+5. Host signs in as the configured broadcaster and grants both requested chat scopes: `user:read:chat` and `user:write:chat`. Check `/health` for `twitch=LIVE_TWITCH`, `eventsub_subscribed=true`, and `chat_reply_status=READY`. An older encrypted token may still support EventSub but lack the write grant; sign in again at `APP_BASE_URL/auth/twitch?role=host` and approve both. `/host/chat` displays a bounded, volatile transcript and reply statuses. `/health` exposes aggregate counters only; no IDs or raw text.
 
-6. With two real viewer accounts in the configured channel, first approve the current proposal in Host Studio and open its vote. Send separate commands at least one second apart: `!join`; then `!persona scholar`, `!trait brave`, `!avatar random`; then `!vote A` or `!vote B`. Confirm the overlay and story stage change. Do not use the demo simulator as live evidence.
+6. Automatic AI replies to ordinary chat are off by default. In Host Studio, enable the checkbox only if the operator accepts sending ordinary viewer message text to the configured AI provider. The connector limits AI replies to six per minute, sends no more than one chat response per second, and reports generation/send failures separately. `!` commands continue to receive fixed acknowledgments. Do not use the demo simulator as live evidence.
 
-7. In OBS, add a Browser Source at `APP_BASE_URL/overlay` and set it to 1920×1080. The page refreshes every three seconds. Check scene, personas and vote counts, and keep the browser source read-only.
+7. With two real viewer accounts in the configured channel, first approve the current proposal in Host Studio and open its vote. Send separate commands at least one second apart: `!join`; then `!persona scholar`, `!trait brave`, `!avatar random`; then `!vote A` or `!vote B`. Confirm the Twitch acknowledgment, aggregate counters, persisted identities/votes, and overlay/story stage changes.
 
-8. Stop with Ctrl+C and wait for the application shutdown message. The current story, persona revisions, AI provenance, accepted receipts and votes are stored in SQLite. Restart and inspect `/health` and Host Studio to confirm persistence before resetting or archiving anything.
+8. In OBS, add a Browser Source at `APP_BASE_URL/overlay` and set it to 1920×1080. The page refreshes every three seconds. Check scene, personas and vote counts, and keep the browser source read-only. Chat text stays in the private host inbox and does not appear on the stream overlay.
+
+9. Stop with Ctrl+C and wait for the application shutdown message. Story, persona revisions, AI provenance, accepted receipts and votes are stored in SQLite. The recent chat inbox is volatile and clears on restart. Inspect `/health` and Host Studio to confirm story persistence before resetting or archiving anything.
 
 ## Backup, restore and credential rotation
 

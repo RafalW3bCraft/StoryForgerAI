@@ -459,12 +459,91 @@ def test_eventsub_queues_acknowledgement_for_accepted_command(monkeypatch, tmp_p
     assert connector.chat_notifications_received == 1
     assert connector.chat_outcomes["ACCEPTED"] == 1
     assert connector.service.persona("viewer-id") is not None
-    assert connector._reply_queue.get_nowait() == (
-        "viewer-message-id",
-        "You joined StoryForge. Check the overlay for your character.",
+    from storyforge.twitch import ChatReplyJob
+
+    assert connector._reply_queue.get_nowait() == ChatReplyJob(
+        "viewer-message-id", text="You joined StoryForge. Check the overlay for your character."
     )
     assert connector.chat_replies_queued == 1
     assert connector.chat_health()["chat_reply_status"] == "READY"
+    engine.dispose()
+
+
+def test_eventsub_ordinary_chat_enters_private_inbox_and_ai_queue_only_after_opt_in(
+    monkeypatch, tmp_path
+):
+    from storyforge import twitch
+    from storyforge.twitch import ChatReplyJob
+
+    settings = Settings(
+        mode="live",
+        database=str(tmp_path / "ordinary-chat.db"),
+        secret="x" * 40,
+        twitch_broadcaster_id="111",
+        twitch_reader_id="111",
+    )
+    engine = make_engine(settings.db_url)
+    sessions = factory(engine)
+
+    class Responder:
+        async def respond(self, viewer_message):
+            return "Hello!"
+
+    service = StoryService(sessions)
+    connector = TwitchConnector(settings, sessions, service, chat_responder=Responder())
+    connector.set_ai_chat_replies_enabled(True)
+    connector.chat_reply_status = "READY"
+    messages = [
+        json.dumps(
+            {
+                "metadata": {"message_type": "session_welcome"},
+                "payload": {"session": {"id": "session-1", "keepalive_timeout_seconds": 30}},
+            }
+        ),
+        json.dumps(
+            {
+                "metadata": {"message_type": "notification"},
+                "payload": {
+                    "subscription": {"type": "channel.chat.message", "version": "1"},
+                    "event": {
+                        "broadcaster_user_id": "111",
+                        "message_id": "ordinary-message-id",
+                        "chatter_user_id": "viewer-id",
+                        "chatter_user_name": "Viewer",
+                        "message": {"text": "Hello StoryForge"},
+                    },
+                },
+            }
+        ),
+    ]
+
+    class Socket:
+        async def recv(self):
+            item = messages.pop(0)
+            if not messages:
+                connector.stop()
+            return item
+
+        async def close(self):
+            pass
+
+    async def connect(*_args, **_kwargs):
+        return Socket()
+
+    async def subscribe(*_args):
+        pass
+
+    connector.subscribe = subscribe
+    monkeypatch.setattr(twitch.websockets, "connect", connect)
+    asyncio.run(connector.consume("fake-token"))
+
+    assert connector.recent_chat()[0]["text"] == "Hello StoryForge"
+    assert connector.recent_chat()[0]["outcome"] == "IGNORED"
+    assert connector.recent_chat()[0]["reply_status"] == "AI_QUEUED"
+    assert connector._reply_queue.get_nowait() == ChatReplyJob(
+        "ordinary-message-id", viewer_message="Hello StoryForge"
+    )
+    assert "Hello StoryForge" not in str(connector.chat_health())
     engine.dispose()
 
 
@@ -482,7 +561,9 @@ def test_reply_worker_sends_queue_item_and_counts_confirmed_send(monkeypatch, tm
     sessions = factory(engine)
     connector = TwitchConnector(settings, sessions, StoryService(sessions))
     connector.chat_reply_status = "READY"
-    connector._reply_queue.put_nowait(("parent-id", "You joined StoryForge."))
+    from storyforge.twitch import ChatReplyJob
+
+    connector._reply_queue.put_nowait(ChatReplyJob("parent-id", text="You joined StoryForge."))
     sent = []
 
     async def fake_get_token(*_args):
@@ -795,6 +876,7 @@ def test_eventsub_malformed_chat_isolated_and_duplicate_receipt_counted(monkeypa
             }
         ),
         notification("malformed-1", None),
+        notification("malformed-2", {"text": 7}),
         notification("chat-1", {"text": "!join"}),
         notification("chat-1", {"text": "!join"}),
     ]
@@ -819,8 +901,9 @@ def test_eventsub_malformed_chat_isolated_and_duplicate_receipt_counted(monkeypa
     monkeypatch.setattr(twitch.websockets, "connect", fake_connect)
     asyncio.run(connector.consume("fake-token"))
 
-    assert connector.chat_notifications_received == 3
+    assert connector.chat_notifications_received == 4
     assert connector.chat_outcomes["IGNORED"] == 1
+    assert connector.chat_outcomes["INVALID"] == 1
     assert connector.chat_outcomes["ACCEPTED"] == 1
     assert connector.chat_outcomes["DUPLICATE"] == 1
     assert service.persona("viewer-1") is not None
@@ -1083,6 +1166,205 @@ def test_ai_provider_validated_structured_mock(monkeypatch):
         )
     )
     assert len(generated.choices) == 2
+
+
+def test_ai_chat_responder_validates_short_reply_and_disables_qwen_thinking(monkeypatch):
+    from storyforge import ai
+    from storyforge.ai import OpenAICompatibleChatResponder
+
+    settings = Settings(
+        mode="live",
+        ai_base_url="https://api.featherless.ai/v1",
+        ai_api_key="fake",
+        ai_model="Qwen/Qwen3.8-27B",
+    )
+    captured = {}
+
+    class Response:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"choices": [{"message": {"content": '{"message":" Welcome, traveler! "}'}}]}
+
+    class Client:
+        def __init__(self, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            pass
+
+        async def post(self, url, json, headers):
+            captured.update(json)
+            return Response()
+
+    monkeypatch.setattr(ai.httpx, "AsyncClient", Client)
+    reply = asyncio.run(OpenAICompatibleChatResponder(settings).respond("hello"))
+
+    assert reply == "Welcome, traveler!"
+    assert captured["max_tokens"] <= 180
+    assert captured["chat_template_kwargs"] == {"enable_thinking": False}
+    assert "untrusted quoted data" in captured["messages"][0]["content"]
+
+
+def test_ai_chat_queue_requires_opt_in_and_reply_worker_records_sent_text(monkeypatch, tmp_path):
+    from storyforge import twitch
+    from storyforge.twitch import ChatReplyJob
+
+    settings = Settings(
+        mode="live",
+        database=str(tmp_path / "ai-chat.db"),
+        secret="x" * 40,
+        ai_base_url="https://provider.test/v1",
+        ai_api_key="fake",
+        ai_model="test-model",
+        twitch_broadcaster_id="111",
+        twitch_reader_id="111",
+    )
+    engine = make_engine(settings.db_url)
+    sessions = factory(engine)
+
+    class Responder:
+        async def respond(self, viewer_message):
+            assert viewer_message == "hello StoryForge"
+            return "Welcome to the story!"
+
+    service = StoryService(sessions)
+    connector = TwitchConnector(settings, sessions, service, chat_responder=Responder())
+    connector.chat_reply_status = "READY"
+    connector.record_chat_message("parent-id", "Viewer", "hello StoryForge")
+
+    async def exercise():
+        connector._queue_ai_chat_reply("parent-id", "hello StoryForge")
+        assert connector._reply_queue.empty()
+        connector.set_ai_chat_replies_enabled(True)
+        connector._queue_ai_chat_reply("parent-id", "hello StoryForge")
+
+    asyncio.run(exercise())
+    job = connector._reply_queue.get_nowait()
+    assert job == ChatReplyJob("parent-id", viewer_message="hello StoryForge")
+    connector._reply_queue.put_nowait(job)
+    sent = []
+
+    async def fake_get_token(*_args):
+        return "fake-access-token"
+
+    async def fake_send(token, parent_id, message):
+        sent.append((parent_id, message))
+        connector.stop()
+        return True
+
+    monkeypatch.setattr(twitch, "get_host_token", fake_get_token)
+    monkeypatch.setattr(twitch, "host_has_chat_write_scope", lambda *_args: True)
+    monkeypatch.setattr(twitch, "CHAT_AI_MIN_INTERVAL_SECONDS", 0)
+    monkeypatch.setattr(twitch, "CHAT_REPLY_INTERVAL_SECONDS", 0)
+    connector.send_chat_message = fake_send
+    asyncio.run(connector._reply_worker())
+
+    assert sent == [("parent-id", "Welcome to the story!")]
+    assert connector.chat_health()["chat_replies_sent"] == 1
+    assert connector.chat_health()["chat_ai_replies_queued"] == 1
+    assert connector.chat_health()["chat_ai_replies_generated"] == 1
+    assert connector.chat_health()["chat_ai_replies_sent"] == 1
+    assert connector.recent_chat()[0]["reply"] == "Welcome to the story!"
+    assert connector.recent_chat()[0]["reply_status"] == "SENT"
+    assert "hello StoryForge" not in str(connector.chat_health())
+    engine.dispose()
+
+
+def test_ai_chat_replies_are_rate_limited_without_exposing_messages(tmp_path):
+    settings = Settings(
+        mode="live",
+        database=str(tmp_path / "ai-chat-throttle.db"),
+        secret="x" * 40,
+        ai_base_url="https://provider.test/v1",
+        ai_api_key="fake",
+        ai_model="test-model",
+        twitch_broadcaster_id="111",
+        twitch_reader_id="111",
+    )
+    engine = make_engine(settings.db_url)
+    sessions = factory(engine)
+
+    class Responder:
+        async def respond(self, viewer_message):
+            return "Hello!"
+
+    service = StoryService(sessions)
+    connector = TwitchConnector(settings, sessions, service, chat_responder=Responder())
+    connector.chat_reply_status = "READY"
+    connector.set_ai_chat_replies_enabled(True)
+
+    async def enqueue_messages():
+        for number in range(7):
+            message_id = f"chat-{number}"
+            text_value = f"ordinary message {number}"
+            connector.record_chat_message(message_id, "Viewer", text_value)
+            connector._queue_ai_chat_reply(message_id, text_value)
+
+    asyncio.run(enqueue_messages())
+
+    metrics = connector.chat_health()
+    assert metrics["chat_ai_replies_queued"] == 6
+    assert metrics["chat_ai_replies_throttled"] == 1
+    assert "ordinary message" not in str(metrics)
+    assert connector.recent_chat()[0]["reply_status"] == "AI_RATE_LIMITED"
+    engine.dispose()
+
+
+def test_ai_chat_generation_failure_is_visible_without_leaking_provider_details(tmp_path):
+    settings = Settings(
+        mode="live",
+        database=str(tmp_path / "ai-chat-failure.db"),
+        secret="x" * 40,
+        ai_base_url="https://provider.test/v1",
+        ai_api_key="fake",
+        ai_model="test-model",
+        twitch_broadcaster_id="111",
+        twitch_reader_id="111",
+    )
+    engine = make_engine(settings.db_url)
+    sessions = factory(engine)
+
+    class BrokenResponder:
+        async def respond(self, _viewer_message):
+            connector.stop()
+            raise ValueError("private provider response")
+
+    service = StoryService(sessions)
+    connector = TwitchConnector(settings, sessions, service, chat_responder=BrokenResponder())
+    connector.chat_reply_status = "READY"
+    connector.set_ai_chat_replies_enabled(True)
+    connector.record_chat_message("failure-id", "Viewer", "hello")
+
+    async def enqueue():
+        connector._queue_ai_chat_reply("failure-id", "hello")
+
+    asyncio.run(enqueue())
+    asyncio.run(connector._reply_worker())
+
+    assert connector.chat_health()["chat_ai_replies_failed"] == 1
+    assert connector.recent_chat()[0]["reply_status"] == "AI_FAILED"
+    assert "private provider response" not in str(connector.chat_health())
+    engine.dispose()
+
+
+def test_recent_chat_inbox_is_bounded_and_keeps_newest_messages(tmp_path):
+    settings = Settings(database=str(tmp_path / "recent-chat.db"), secret="x" * 40)
+    engine = make_engine(settings.db_url)
+    sessions = factory(engine)
+    connector = TwitchConnector(settings, sessions, StoryService(sessions))
+    for number in range(35):
+        connector.record_chat_message(f"message-{number}", "Viewer", f"message {number}")
+
+    recent = connector.recent_chat()
+    assert len(recent) == 30
+    assert recent[0]["text"] == "message 34"
+    assert recent[-1]["text"] == "message 5"
+    engine.dispose()
 
 
 def test_featherless_qwen_disables_thinking_for_final_narrative(monkeypatch):

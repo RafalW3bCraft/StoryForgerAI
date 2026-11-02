@@ -7,7 +7,7 @@
 
 ## Current finalization evidence — November 2, 2026
 
-The entries below are the current verification snapshot and supersede earlier test counts and external-state conclusions later in this chronology. They were run against code/test commit `9a36319112e8fd83200abcc2b43c81861176d183`, derived from the audited baseline; the operator's two pre-existing untracked files were preserved.
+The entries below were the finalization snapshot at 09:24 UTC and were run against code/test commit `9a36319112e8fd83200abcc2b43c81861176d183`, derived from the audited baseline; the operator's two pre-existing untracked files were preserved. The later Nov 2 follow-up sections below supersede these counts and the pre-fix chat conclusions.
 
 | Command / check | Result | Evidence |
 |---|---|---|
@@ -49,6 +49,30 @@ The live database currently preserves a canonical node with `AI` provenance and 
 - SQLite application startup and the doctor write probe enforce owner-only permissions for file-backed DBs. New-file and existing-file regressions pass.
 
 Earlier dated sections below record chronological intermediate failures and results. In particular, old statements that the host token was missing, the provider timed out, no AI node existed, or the suite stalled are historical and are superseded by this current snapshot. Real chat, two-viewer voting, fresh client-secret OAuth, OBS capture, and submission state remain unverified.
+
+## Nov 2 follow-up: outbound Twitch chat replies
+
+The operator clarified that command effects were visible in Host Studio/OBS but StoryForge did not answer in Twitch chat. The source had no outbound Helix call and host OAuth requested only `user:read:chat`. Added host consent for `user:write:chat`, persisted the granted scope inside the encrypted token vault, and added fixed threaded acknowledgments for accepted commands plus `!help`/information outcomes. Unknown, duplicate, and cooldown events remain silent; viewer text is never echoed. A bounded queue paces sends to one request per second and counts queued, Twitch-confirmed sent, failed, dropped, and scope-unavailable/skipped acknowledgments in redacted `/health`.
+
+| Check | Result | Evidence |
+|---|---|---|
+| RED regression run | PASS as expected failure | Before implementation, the focused new tests failed: **4 failed, 18 deselected** (missing write scope, encrypted scope helper, Helix send method, and outcome mapping). |
+| Focused code regression | PASS | `/tmp/storyforge-py313-venv/bin/python -m pytest -q tests/test_integrations.py tests/test_app.py`: **50 passed** after the initial implementation. |
+| Full suite | PASS | `/tmp/storyforge-py313-venv/bin/python -m pytest -q -o faulthandler_timeout=15`: **86 passed in 3.90s**, exit 0. |
+| Coverage and resource warnings | PASS | `/tmp/storyforge-py313-venv/bin/python -m pytest --cov=storyforge --cov-report=term-missing -q -W error::ResourceWarning`: **86 passed in 6.36s; 84% total coverage**, exit 0. |
+| Ruff and formatting | PASS | `ruff check src tests` passed; `ruff format --check src tests` reported 19 files formatted. |
+| Types and compile | PASS | `mypy src/storyforge` passed for 12 files; `compileall -q src` passed. |
+| Dependency consistency | PASS | `pip check` passed with no broken requirements; pip printed a local cache permission warning. |
+
+Additional tests verify exact `POST /helix/chat/messages` body/headers including the EventSub parent message ID, Twitch `is_sent=true` handling, rejected/401 status redaction, OAuth scope and encrypted storage, explicit no-scope reauthorization, EventSub queue insertion, send-worker accounting, queue overflow, fixed non-echoing reply text, and silence for duplicate/cooldown/unknown outcomes. The operator has since reauthorized; current health reports `chat_reply_status=READY`, but the real application has **not** yet received an outbound reply. Confirm `chat_replies_sent` increments after Twitch returns a real `is_sent=true` response. No mock is counted as external verification.
+
+## Nov 2 follow-up: EventSub notification type
+
+After the operator reauthorized and sent chat messages, the live application still reported zero chat notifications while `/health` showed an active subscription. Inspection found the receive loop was checking `metadata.message_type == "session_notification"`. Twitch's current WebSocket protocol names event deliveries **`notification`**; `session_welcome` and `session_keepalive` are the session-prefixed message types. See Twitch's [WebSocket message reference](https://dev.twitch.tv/docs/eventsub/handling-websocket-events/). The old fixtures repeated the wrong name, so they had hidden the protocol mismatch.
+
+RED/GREEN evidence: changed the accepted-command EventSub regression to use Twitch's documented `notification` message type; it failed before the patch because the reply queue remained empty. Changed the handler and all EventSub chat fixtures to `notification`; the integration suite passed **28 tests**. The latest full suite passed **86 tests in 7.48s**; coverage passed **86 tests in 11.81s with 84% total coverage** and `ResourceWarning` as errors. Ruff, formatter, mypy (12 source files), compileall, `pip check`, pip-audit (no known dependency vulnerabilities), Bandit Medium/High, and `git diff --check` passed.
+
+Restarted the live app with the corrected handler and confirmed `/health` reports `LIVE_TWITCH`, `eventsub_subscribed=true`, and `chat_reply_status=READY`. At that post-restart observation, notifications, accepted commands, queued replies, and sent replies were still all zero. Twitch does not replay messages the old handler ignored; a new real `!join` is required to verify live receive, persistence, and Twitch-confirmed reply delivery. No external success is claimed until those counters change.
 
 ## Nov 2 follow-up: OAuth origin and runtime diagnostics
 
@@ -158,4 +182,29 @@ This paragraph is a historical pre-finalization checkpoint: the earlier full-sui
 - A documentation-only push advanced `main` to `9e6a514b951aa81b0155b88f619c52c11f4255e9`; Actions run [`41420537063`](https://github.com/RafalW3bCraft/StoryForgerAI/actions/runs/41420537063) also passed on that exact SHA with both Python 3.12 and Python 3.13 jobs green.
 - The two pre-existing operator files remained untracked and were not pushed. No `.env`, SQLite file or cache file is tracked.
 
-These GitHub checks do not substitute for real chat/vote/OBS evidence. The working local app continues to report an active subscription and zero real chat notifications.
+These GitHub checks do not substitute for real chat/vote/OBS evidence. This was the status at that earlier cutoff; a later live snapshot is recorded below.
+
+## Nov 2 host chat inbox and optional AI reply follow-up
+
+The live EventSub `notification` correction was exercised by the operator's real broadcaster chat before the app restart. At 10:44 UTC, redacted `/health` showed 17 received notifications, 7 accepted, 9 ignored, 1 invalid, 8 Twitch-confirmed sends, and zero processing errors, failed sends, or drops. The broadcaster was the sender; no second viewer/vote evidence is claimed.
+
+The host inbox is volatile and host-only. `Host Studio` links to `/host/chat`, a three-second refreshed page; message strings are escaped in Jinja2 and omitted from public health/OBS and SQLite. The persisted AI-reply control is CSRF protected, disabled by default, and refuses activation without the configured live provider. Ordinary messages enter the common paced Twitch reply queue only while the host has opted in. Replies are schema-validated, capped at six per minute, and limited to one Twitch send per second. AI chat generation remains locally verified only; no real AI-generated Twitch chat response has been made.
+
+The test additions cover persisted opt-in, host access/CSRF, message escaping and public-view redaction, provider reply validation, EventSub ordinary-message routing, confirmed worker sends, model failure status, queue/rate caps, and transcript bounds. Fixture tests do not count as live provider or Twitch evidence.
+
+### Final local verification — November 2, 2026, Python 3.13.15
+
+| Command | Result |
+|---|---|
+| `/tmp/storyforge-py313-venv/bin/python -m pytest -q -o faulthandler_timeout=15` | PASS, exit 0; **96 passed in 3.91s**. |
+| `/tmp/storyforge-py313-venv/bin/python -m pytest --cov=storyforge --cov-report=term-missing -q -W error::ResourceWarning` | PASS, exit 0; **96 passed in 7.68s; 84% coverage**, no `ResourceWarning`. |
+| `/tmp/storyforge-py313-venv/bin/python -m ruff check src tests` / `ruff format --check src tests` | PASS, exit 0; all checks passed and 19 files formatted. |
+| `/tmp/storyforge-py313-venv/bin/python -m mypy src/storyforge` | PASS, exit 0; 12 files, no issues. |
+| `/tmp/storyforge-py313-venv/bin/python -m compileall -q src` | PASS, exit 0. |
+| `/tmp/storyforge-py313-venv/bin/python -m pip check` | PASS, exit 0; no broken requirements. Pip emitted a local cache-permission warning only. |
+| `/tmp/storyforge-py313-venv/bin/python -m pip_audit --skip-editable` | PASS, exit 0; no known vulnerabilities in audited distributions; editable app skipped. |
+| `/tmp/storyforge-py313-venv/bin/python -m bandit -r src --ignore-nosec --severity-level medium --confidence-level medium -q` | PASS, exit 0; no Medium/High findings. |
+| `/tmp/storyforge-py313-venv/bin/python -m storyforge doctor` | PASS, exit 0; 13 variable names shown, all values redacted, local checks passed, SQLite writable. No external probes were made by this command. |
+| `git diff --check` | PASS, exit 0. |
+
+One separate focused pytest invocation that included the EventSub malformed-payload case stalled in the sandbox's `asyncio.to_thread` wakeup path and was interrupted (exit 130); `faulthandler` showed the event loop waiting in `select`. The complete suite and coverage run both passed after that attempt, including the same regression. This is recorded as a sandbox-runner limitation, not a passing focused command.

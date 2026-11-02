@@ -1,6 +1,14 @@
 # Final StoryForge evidence report
 
-**Evidence captured:** 2026-11-02 through 09:24 UTC
+## Latest live chat and host inbox follow-up — November 2, 2026
+
+At 10:44 UTC, immediately before preparing the new host inbox build for restart, `/health` on the live StoryForge process reported 17 real chat notifications, 7 accepted commands, 9 ignored messages, 1 invalid command, and 8 Twitch-confirmed sends (`is_sent=true`). Processing errors, reply failures, and drops were all zero. These messages came from the broadcaster account; this does not verify a distinct viewer persona, voting, or a canonical branch transition. The AI-generated narrative probe remains verified, but no AI-generated Twitch chat response has been confirmed.
+
+Implemented locally after that live snapshot: a `/host/chat` page that refreshes every three seconds, shows a bounded 30-message in-memory transcript and reply status, and is restricted to the host role; a CSRF-protected Host Studio toggle for AI replies to ordinary chat, off by default; validated short replies through the configured AI provider; and global queue pacing plus a six-per-minute AI cap. Raw chat stays out of `/health`, SQLite, logs, and the public OBS overlay. The toggle warns that message text goes to the configured provider. Local tests cover the responder, opt-in, failure/rate-limit handling, private access, escaping and overlay isolation; these mocks do not prove live AI replies.
+
+Removed five stale/redundant tracked walkthrough/planning files: the three files under `submission/`, `docs/JUDGE_TESTING.md`, and `docs/IMPLEMENTATION_PLAN.md`. The two pre-existing untracked operator audit/prompt files remain untouched. At this update, code/docs/test changes are local and not yet pushed; the final commit SHA must be recorded after commit.
+
+**Evidence captured:** 2026-11-02 through 10:48 UTC; the prior 10:18 snapshot below is retained as historical evidence.
 
 **Working directory:** `/mnt/hostname/ai-storyforge`
 
@@ -12,7 +20,7 @@
 
 **Published release snapshot:** `4ef8e3ea16a0562df9a66e1b42ece05242d48449`. GitHub API and public repository page both returned HTTP 200; repository visibility is public; `git ls-remote origin main` matched the SHA. Actions run `41419869542` passed on that SHA for both Python 3.12 and 3.13. The two operator-owned untracked files remain untouched.
 
-The documentation-only follow-up advanced `main` to `9e6a514b951aa81b0155b88f619c52c11f4255e9`. GitHub Actions run [`41420537063`](https://github.com/RafalW3bCraft/StoryForgerAI/actions/runs/41420537063) passed on that exact SHA for both Python 3.12 and 3.13. Application source and tests are unchanged from tested source commit `9a36319112e8fd83200abcc2b43c81861176d183`.
+The published follow-up advanced `main` to `9e6a514b951aa81b0155b88f619c52c11f4255e9`; later `origin/main` is `e4c526934fc529d7e9d96cab3560530c874f7dd3`. GitHub Actions run [`41420537063`](https://github.com/RafalW3bCraft/StoryForgerAI/actions/runs/41420537063) passed on `9e6a514…` for Python 3.12 and 3.13. Local HEAD `22a2ef4…` fixed the EventSub discriminator; current uncommitted source adds the host inbox and opt-in AI replies. These current changes have not been pushed or run in GitHub Actions.
 
 The operator's pre-existing `StoryForgerAI_Codex_ECC_Finalization_Prompt.md` and `StoryForgerAI_Verified_Audit_2026-11-01.md` files were preserved and excluded from engineering staging. No secrets or database files were intentionally read into output or added to Git.
 
@@ -21,8 +29,8 @@ The operator's pre-existing `StoryForgerAI_Codex_ECC_Finalization_Prompt.md` and
 | Check | Exact command | Result |
 |---|---|---|
 | Install | `/tmp/storyforge-py313-venv/bin/python -m pip install -e '.[dev]'` | PASS, exit 0; clean isolated Python 3.13.15 environment. |
-| Full tests | `/tmp/storyforge-py313-venv/bin/python -m pytest -q -o faulthandler_timeout=15` | PASS, exit 0; **76 passed in 8.06s**. |
-| Coverage/resources | `/tmp/storyforge-py313-venv/bin/python -m pytest --cov=storyforge --cov-report=term-missing -q -W error::ResourceWarning` | PASS, exit 0; **76 passed in 10.66s; 85% total coverage**, no ResourceWarning. |
+| Full tests | `/tmp/storyforge-py313-venv/bin/python -m pytest -q -o faulthandler_timeout=15` | PASS, exit 0; latest run **96 passed in 3.91s**. |
+| Coverage/resources | `/tmp/storyforge-py313-venv/bin/python -m pytest --cov=storyforge --cov-report=term-missing -q -W error::ResourceWarning` | PASS, exit 0; **96 passed in 7.68s; 84% total coverage**, no ResourceWarning. |
 | Ruff | `/tmp/storyforge-py313-venv/bin/python -m ruff check src tests` | PASS, exit 0. |
 | Formatter | `/tmp/storyforge-py313-venv/bin/python -m ruff format --check src tests` | PASS, exit 0; 19 files already formatted. |
 | Types | `/tmp/storyforge-py313-venv/bin/python -m mypy src/storyforge` | PASS, exit 0; 12 source files. |
@@ -89,7 +97,7 @@ Read-only HTTP route checks against the restarted app:
 | `/auth/twitch?role=host` | 307 | Generated callback matched the configured origin; no grant/token exchange. |
 | `/auth/callback` with synthetic access-denied state | 303 | Safe redirect to configured origin; no JSON detail response. |
 
-No actual `!join`, `!persona`, `!trait`, `!avatar`, `!vote`, contribution, two-viewer vote, or canonical branch transition has been verified. StoryForge does not reply in Twitch chat; verify commands through the redacted counters, persisted state, Host Studio and `/overlay`. The mock 50-event burst is not a substitute. No real OBS Browser Source, 1920×1080 capture, or YouTube footage was produced.
+Before the latest fix, real chat notifications were skipped because the handler checked the wrong EventSub WebSocket message type. That is corrected and the app was restarted. At the latest post-fix health check, `LIVE_TWITCH`, `eventsub_subscribed=true`, and `chat_reply_status=READY` were present, but all notification and reply counters remained zero. Twitch does not replay previously ignored chat; a fresh `!join` is needed to verify live delivery and a real reply. No real post-fix `!join`, persona edit, `!vote`, contribution, two-viewer vote, or canonical branch transition has yet been verified. The mock EventSub tests are not live evidence. No real OBS Browser Source, 1920×1080 capture, or YouTube footage was produced.
 
 ## Codex, ECC, provenance and submission
 
@@ -103,12 +111,12 @@ No actual `!join`, `!persona`, `!trait`, `!avatar`, `!vote`, contribution, two-v
 
 | Requirement | Status | Cause, correction, and evidence needed |
 |---|---|---|
-| Python-only architecture and tests | PASS | 76 tests, 85% coverage; no custom JS/TS added. |
+| Python-only architecture and tests | PASS | Latest local run: 96 tests, 84% coverage; no custom JS/TS added. |
 | Secure redacted configuration | PARTIAL PASS | All 13 names checked; values withheld; `.env` and DB now `0600`. Rotate any previously exposed credentials. |
 | Stored Twitch host identity | PASS | Live token decrypt and broadcaster identity verified. |
 | Fresh Twitch OAuth/client secret | BLOCKED | Requires operator browser authorization with current secret; capture successful token exchange without exposing code. |
 | Active EventSub subscription | PASS | Live probe and health show enabled subscription. |
-| Real EventSub chat delivery | BLOCKED | Counters/receipts remain zero; two real viewers must issue standalone commands. |
+| Real EventSub chat delivery | PARTIAL | Live broadcaster health showed 17 notifications, 7 accepted commands, and 8 Twitch-confirmed replies; distinct viewer persona/voting still need another account. |
 | Real persona and vote state | BLOCKED | Zero viewer personas, receipts, and votes; verify two identities, revisions, votes, and a canonical successor. |
 | Live model response | PASS | Actual response passed Pydantic schema. |
 | Current proposal approval/branch flow | BLOCKED | AI proposal remains `PENDING` in `REVIEW`; host approval and real vote required. Existing AI canonical provenance persisted after app restart. |

@@ -22,13 +22,15 @@ No authored JavaScript or TypeScript is used. Browser UI is Jinja2-rendered HTML
 
 ## Twitch
 
-The EventSub adapter uses `channel.chat.message` v1 and a user OAuth token with `user:read:chat` scope. The broadcaster and reader must be the same configured OAuth user. Token vault stores encrypted access/refresh tokens. A background process creates the subscription upon a WebSocket welcome, handles notifications, keepalives, reconnection URL migration, revocation, and reconnect after a lost connection. Official Twitch docs say lost events cannot be replayed. The connector refuses untrusted reconnect hosts.
+The EventSub adapter uses `channel.chat.message` v1 and a user OAuth token with `user:read:chat` scope. The broadcaster and reader must be the same configured OAuth user. Token vault stores encrypted access/refresh tokens. A background process creates the subscription upon a WebSocket welcome, handles `notification` messages, keepalives, reconnection URL migration, revocation, and reconnect after a lost connection. Official Twitch docs say lost events cannot be replayed. The connector refuses untrusted reconnect hosts. Accepted commands get bounded fixed threaded replies via Helix when `user:write:chat` is authorized. Ordinary chat can receive an AI reply only when the host explicitly enables the persisted preference; replies are capped at six per minute and share the paced outbound queue.
+
+Recent incoming messages and reply states are held in a bounded in-memory transcript and rendered only in the host-authenticated `/host/chat` page. It refreshes every three seconds. Raw chat text is not written to SQLite and is not exposed by `/health` or the public OBS overlay.
 
 ## Known architectural limitations
 
 - Host dashboard refreshes manually; overlay page refreshes every three seconds, not streaming DOM deltas.
-- Chat informational commands have no outbound Twitch response integration.
+- The AI chat responder has unit/mock verification only; an actual model-generated chat reply has not been confirmed on Twitch.
 - Single process/SQLite is the supported operating model.
 - `StoryService.process_chat` writes receipts only for recognized state-changing commands, persists accepted message IDs, and uses bounded process-local per-viewer cooldown and rejected-event replay caches. The app also serializes model generation with an in-process lock. These controls do not coordinate multiple workers, and accepted receipt retention/cleanup remains a deployment concern.
 - Persona relationships, voice capture, camera guidance, image-generation models, richer alternate-timeline exploration, and multi-stream collaboration are not implemented.
-- The stored Twitch host identity, active EventSub subscription, and one real schema-validated AI response have been verified with the configured credentials. Actual chat-command delivery, viewer voting, reconnect under live traffic, and browser/OBS presentation remain unverified; see `FINAL_EVIDENCE_REPORT.md`.
+- The stored Twitch host identity, active EventSub subscription, one real schema-validated AI narrative, and broadcaster chat/reply flow have been verified with configured credentials. Two-viewer participation/voting, reconnect under live traffic, and browser/OBS visual acceptance remain unverified; see `FINAL_EVIDENCE_REPORT.md`.

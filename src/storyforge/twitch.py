@@ -5,8 +5,10 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from collections import Counter
+from collections import Counter, deque
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from threading import Lock
 from urllib.parse import urlencode, urlparse
 
 import httpx
@@ -14,6 +16,7 @@ import websockets
 from cryptography.fernet import Fernet, InvalidToken
 from sqlalchemy.orm import sessionmaker
 
+from .ai import ChatResponder
 from .config import Settings
 from .models import TokenVault
 from .service import StoryService
@@ -25,6 +28,16 @@ LOGGER = logging.getLogger(__name__)
 CHAT_WRITE_SCOPE = "user:write:chat"
 CHAT_REPLY_INTERVAL_SECONDS = 1.0
 CHAT_REPLY_QUEUE_SIZE = 32
+CHAT_AI_REPLIES_PER_MINUTE = 6
+CHAT_AI_MIN_INTERVAL_SECONDS = 5.0
+RECENT_CHAT_LIMIT = 30
+
+
+@dataclass(frozen=True)
+class ChatReplyJob:
+    parent_message_id: str
+    text: str | None = None
+    viewer_message: str | None = None
 
 
 def reply_for_chat_outcome(result: str) -> str | None:
@@ -181,8 +194,16 @@ async def get_host_token(settings: Settings, sessions: sessionmaker) -> str | No
 
 
 class TwitchConnector:
-    def __init__(self, settings: Settings, sessions: sessionmaker, service: StoryService):
+    def __init__(
+        self,
+        settings: Settings,
+        sessions: sessionmaker,
+        service: StoryService,
+        chat_responder: ChatResponder | None = None,
+    ):
         self.settings, self.sessions, self.service = settings, sessions, service
+        self.chat_responder = chat_responder
+        self.ai_chat_replies_enabled = service.ai_chat_replies_enabled()
         self.status = "NOT_CONFIGURED" if settings.mode == "demo" else "NEEDS_AUTH"
         self.last_event: str | None = None
         self.last_error: str | None = None
@@ -195,10 +216,54 @@ class TwitchConnector:
         self.chat_replies_failed = 0
         self.chat_replies_dropped = 0
         self.chat_replies_skipped = 0
-        self._reply_queue: asyncio.Queue[tuple[str, str]] = asyncio.Queue(
+        self.chat_ai_replies_queued = 0
+        self.chat_ai_replies_generated = 0
+        self.chat_ai_replies_sent = 0
+        self.chat_ai_replies_failed = 0
+        self.chat_ai_replies_throttled = 0
+        self._reply_queue: asyncio.Queue[ChatReplyJob] = asyncio.Queue(
             maxsize=CHAT_REPLY_QUEUE_SIZE
         )
+        self._ai_queued_at: deque[float] = deque()
+        self._recent_chat: deque[dict[str, str]] = deque(maxlen=RECENT_CHAT_LIMIT)
+        self._recent_chat_by_id: dict[str, dict[str, str]] = {}
+        self._chat_lock = Lock()
         self._stop = asyncio.Event()
+
+    def record_chat_message(self, message_id: str, display: str, text: str) -> None:
+        """Keep a short, volatile transcript for the authenticated host inbox only."""
+        cleaned_text = "".join(char for char in text[:500] if char.isprintable() or char == "\t")
+        entry = {
+            "received_at": datetime.now(UTC).strftime("%H:%M:%S UTC"),
+            "display": display[:80] or "Viewer",
+            "text": cleaned_text,
+            "outcome": "RECEIVED",
+            "reply": "",
+            "reply_status": "NO_REPLY",
+        }
+        with self._chat_lock:
+            if len(self._recent_chat) == RECENT_CHAT_LIMIT:
+                expired = self._recent_chat[0]
+                for key, candidate in tuple(self._recent_chat_by_id.items()):
+                    if candidate is expired:
+                        self._recent_chat_by_id.pop(key, None)
+                        break
+            self._recent_chat.append(entry)
+            self._recent_chat_by_id[message_id] = entry
+
+    def update_chat_message(self, message_id: str, **updates: str) -> None:
+        with self._chat_lock:
+            entry = self._recent_chat_by_id.get(message_id)
+            if entry is not None:
+                entry.update(updates)
+
+    def recent_chat(self) -> list[dict[str, str]]:
+        with self._chat_lock:
+            return [dict(entry) for entry in reversed(self._recent_chat)]
+
+    def set_ai_chat_replies_enabled(self, enabled: bool) -> None:
+        self.service.set_ai_chat_replies_enabled(enabled)
+        self.ai_chat_replies_enabled = enabled
 
     def _record_chat_outcome(self, result: str) -> None:
         if result in {"JOINED", "UPDATED", "VOTED", "QUEUED", "LEFT"}:
@@ -233,6 +298,11 @@ class TwitchConnector:
             "chat_replies_failed": self.chat_replies_failed,
             "chat_replies_dropped": self.chat_replies_dropped,
             "chat_replies_skipped": self.chat_replies_skipped,
+            "chat_ai_replies_queued": self.chat_ai_replies_queued,
+            "chat_ai_replies_generated": self.chat_ai_replies_generated,
+            "chat_ai_replies_sent": self.chat_ai_replies_sent,
+            "chat_ai_replies_failed": self.chat_ai_replies_failed,
+            "chat_ai_replies_throttled": self.chat_ai_replies_throttled,
         }
 
     def _queue_chat_reply(self, message_id: str, result: str) -> None:
@@ -241,14 +311,47 @@ class TwitchConnector:
             return
         if self.chat_reply_status != "READY":
             self.chat_replies_skipped += 1
+            self.update_chat_message(message_id, reply_status="SEND_UNAVAILABLE")
             return
         try:
-            self._reply_queue.put_nowait((message_id, reply))
+            self._reply_queue.put_nowait(ChatReplyJob(message_id, text=reply))
         except asyncio.QueueFull:
             self.chat_replies_dropped += 1
+            self.update_chat_message(message_id, reply_status="QUEUE_FULL")
             LOGGER.warning("Twitch chat reply queue full; one acknowledgement was dropped")
         else:
             self.chat_replies_queued += 1
+            self.update_chat_message(message_id, reply=reply, reply_status="QUEUED")
+
+    def _queue_ai_chat_reply(self, message_id: str, text: str) -> None:
+        if (
+            self.settings.mode != "live"
+            or self.chat_responder is None
+            or not self.ai_chat_replies_enabled
+        ):
+            self.update_chat_message(message_id, reply_status="AI_REPLIES_OFF")
+            return
+        if self.chat_reply_status != "READY":
+            self.chat_replies_skipped += 1
+            self.update_chat_message(message_id, reply_status="SEND_UNAVAILABLE")
+            return
+        now = asyncio.get_running_loop().time()
+        while self._ai_queued_at and now - self._ai_queued_at[0] >= 60:
+            self._ai_queued_at.popleft()
+        if len(self._ai_queued_at) >= CHAT_AI_REPLIES_PER_MINUTE:
+            self.chat_ai_replies_throttled += 1
+            self.update_chat_message(message_id, reply_status="AI_RATE_LIMITED")
+            return
+        try:
+            self._reply_queue.put_nowait(ChatReplyJob(message_id, viewer_message=text[:400]))
+        except asyncio.QueueFull:
+            self.chat_replies_dropped += 1
+            self.update_chat_message(message_id, reply_status="QUEUE_FULL")
+        else:
+            self._ai_queued_at.append(now)
+            self.chat_replies_queued += 1
+            self.chat_ai_replies_queued += 1
+            self.update_chat_message(message_id, reply_status="AI_QUEUED")
 
     async def send_chat_message(self, token: str, parent_id: str, message: str) -> bool:
         """Send one bounded acknowledgement as a threaded reply through Twitch Helix."""
@@ -287,14 +390,41 @@ class TwitchConnector:
 
     async def _reply_worker(self) -> None:
         last_attempt = 0.0
+        last_ai_attempt = 0.0
         while not self._stop.is_set():
             try:
-                parent_id, message = await asyncio.wait_for(self._reply_queue.get(), timeout=0.5)
+                job = await asyncio.wait_for(self._reply_queue.get(), timeout=0.5)
             except TimeoutError:
                 continue
+            ai_generated = False
             try:
                 if self.chat_reply_status != "READY":
                     self.chat_replies_failed += 1
+                    self.update_chat_message(job.parent_message_id, reply_status="SEND_FAILED")
+                    continue
+                message = job.text
+                if job.viewer_message is not None:
+                    if self.chat_responder is None or not self.ai_chat_replies_enabled:
+                        self.chat_replies_skipped += 1
+                        self.update_chat_message(
+                            job.parent_message_id, reply_status="AI_REPLIES_OFF"
+                        )
+                        continue
+                    loop = asyncio.get_running_loop()
+                    ai_wait = CHAT_AI_MIN_INTERVAL_SECONDS - (loop.time() - last_ai_attempt)
+                    if ai_wait > 0:
+                        await asyncio.sleep(ai_wait)
+                    self.update_chat_message(job.parent_message_id, reply_status="AI_GENERATING")
+                    last_ai_attempt = loop.time()
+                    message = await self.chat_responder.respond(job.viewer_message)
+                    ai_generated = True
+                    self.chat_ai_replies_generated += 1
+                    self.update_chat_message(
+                        job.parent_message_id, reply=message, reply_status="SENDING"
+                    )
+                if message is None:
+                    self.chat_replies_failed += 1
+                    self.update_chat_message(job.parent_message_id, reply_status="SEND_FAILED")
                     continue
                 loop = asyncio.get_running_loop()
                 wait = CHAT_REPLY_INTERVAL_SECONDS - (loop.time() - last_attempt)
@@ -304,20 +434,38 @@ class TwitchConnector:
                 if not token:
                     self.chat_reply_status = "NEEDS_AUTH"
                     self.chat_replies_failed += 1
+                    self.update_chat_message(job.parent_message_id, reply_status="SEND_FAILED")
                     continue
                 if not host_has_chat_write_scope(self.settings, self.sessions):
                     self.chat_reply_status = "REAUTH_REQUIRED"
                     self.chat_replies_failed += 1
+                    self.update_chat_message(job.parent_message_id, reply_status="SEND_FAILED")
                     continue
                 last_attempt = loop.time()
-                if await self.send_chat_message(token, parent_id, message):
+                if await self.send_chat_message(token, job.parent_message_id, message):
                     self.chat_replies_sent += 1
+                    if job.viewer_message is not None:
+                        self.chat_ai_replies_sent += 1
+                    self.update_chat_message(
+                        job.parent_message_id, reply=message, reply_status="SENT"
+                    )
                 else:
                     self.chat_replies_failed += 1
+                    self.update_chat_message(
+                        job.parent_message_id, reply=message, reply_status="SEND_REJECTED"
+                    )
             except asyncio.CancelledError:
                 raise
             except Exception as exc:  # noqa: BLE001 - no API details in logs or health
                 self.chat_replies_failed += 1
+                if job.viewer_message is not None and not ai_generated:
+                    self.chat_ai_replies_failed += 1
+                status = (
+                    "AI_FAILED"
+                    if job.viewer_message is not None and not ai_generated
+                    else "SEND_FAILED"
+                )
+                self.update_chat_message(job.parent_message_id, reply_status=status)
                 LOGGER.warning("Twitch chat reply failed (%s)", type(exc).__name__)
             finally:
                 self._reply_queue.task_done()
@@ -404,17 +552,27 @@ class TwitchConnector:
                     ):
                         continue
                     message = event.get("message")
-                    content = message.get("text", "") if isinstance(message, dict) else ""
+                    raw_content = message.get("text", "") if isinstance(message, dict) else ""
                     msg_id = event.get("message_id") or metadata.get("message_id")
                     if msg_id and event.get("chatter_user_id"):
                         self.chat_notifications_received += 1
                         self.last_event = datetime.now(UTC).isoformat()
+                        event_id = str(msg_id)
+                        display = str(event.get("chatter_user_name") or "Viewer")
+                        content = raw_content if isinstance(raw_content, str) else ""
+                        self.record_chat_message(event_id, display, content)
+                        if not isinstance(raw_content, str):
+                            self._record_chat_outcome("INVALID")
+                            self.update_chat_message(
+                                event_id, outcome="INVALID", reply_status="NO_REPLY"
+                            )
+                            continue
                         try:
                             result = await asyncio.to_thread(
                                 self.service.process_chat,
-                                str(msg_id),
+                                event_id,
                                 str(event["chatter_user_id"]),
-                                str(event.get("chatter_user_name") or "Viewer"),
+                                display,
                                 content,
                             )
                         except Exception as exc:  # noqa: BLE001 - surface only safe aggregate telemetry
@@ -425,7 +583,12 @@ class TwitchConnector:
                             )
                         else:
                             self._record_chat_outcome(result)
-                            self._queue_chat_reply(str(msg_id), result)
+                            self.update_chat_message(
+                                event_id, outcome=result, reply_status="NO_REPLY"
+                            )
+                            self._queue_chat_reply(event_id, result)
+                            if content.strip() and not content.lstrip().startswith("!"):
+                                self._queue_ai_chat_reply(event_id, content)
                 elif kind == "session_reconnect":
                     url = msg["payload"]["session"]["reconnect_url"]
                     parsed = urlparse(url)

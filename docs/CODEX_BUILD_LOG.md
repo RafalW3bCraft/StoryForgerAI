@@ -123,3 +123,21 @@ The current `.env` values were not printed and no live request was made. The aud
 - GitHub API confirms the repository is public; repository page returned HTTP 200; `git ls-remote origin main` matched `4ef8e3ea16a0562df9a66e1b42ece05242d48449`.
 - GitHub Actions run `41419869542` succeeded on that exact release snapshot for both Python 3.12 and 3.13. This workflow run does not represent real Twitch viewer traffic or OBS footage.
 - The public `main` was then advanced by a documentation-only commit to `9e6a514b951aa81b0155b88f619c52c11f4255e9`; exact `origin/main` matched. GitHub Actions run `41420537063` passed on this newer SHA for both supported Python versions.
+
+## Nov 2 host chat inbox and optional AI reply control
+
+- Reproduced the failing preference regression: `StoryService.ai_chat_replies_enabled` did not exist. Added a `runtime_settings` record, default-off behavior, and persistence verification across service instances.
+- Added a host-only `/host/chat` page that refreshes every three seconds and displays at most 30 in-memory messages with incoming text and reply states. Jinja escapes all text; health, SQLite, logs, and the public OBS overlay do not expose it.
+- Added a CSRF-protected Host Studio setting. Only ordinary messages enter AI response generation after explicit opt-in. The provider request and `ChatReply` output are bounded and validated; AI requests are capped at six per minute, and all Twitch responses share the one-per-second queue. Command acknowledgments remain fixed.
+- Added tests for setting persistence, access/CSRF, HTML escaping and public redaction, provider schema, EventSub routing, send success/failure, throttling, and bounded inbox storage. Mocked transport proves local logic only.
+- Live health immediately before the new-code restart recorded 17 notifications, 7 accepted commands, 9 ignored, 1 invalid, and 8 Twitch-confirmed sends. The broadcaster account sent these messages; no second viewer, live vote, or AI-generated chat reply is evidenced.
+- Removed five obsolete walkthrough/planning files at the operator's request. The two untracked operator prompt/audit files remain unchanged.
+
+## Nov 2 EventSub chat delivery repair
+
+- The operator reported sending multiple messages in `noviced3v`; live health remained at zero notifications, accepted commands, queued replies, and sent replies while showing an active EventSub subscription.
+- Root cause: `TwitchConnector.consume()` accepted `metadata.message_type == "session_notification"`, but Twitch WebSocket EventSub uses `"notification"` for event deliveries. The old test fixtures repeated the wrong protocol value. Twitch's current [WebSocket handling docs](https://dev.twitch.tv/docs/eventsub/handling-websocket-events/) confirm `notification`.
+- RED/GREEN: changed the accepted `!join` EventSub regression to Twitch's real message type; it failed before the fix with an empty reply queue. Changed the handler and all EventSub fixtures to `notification`; the integration suite passed **28 tests**, full suite **86 passed**, and coverage **84%**. Ruff, format, mypy, compileall, pip check, pip-audit, Bandit Medium/High, and diff check passed.
+- Confirmed via a read-only Twitch Helix lookup that login `noviced3v` maps to numeric user ID `1601216700`; operator `.env` has that same value for broadcaster and reader. Restarted StoryForge with the handler fix; health reports `LIVE_TWITCH`, enabled subscription, and `chat_reply_status=READY`.
+- Immediately after restart, chat event/reply counters remain zero. Twitch does not replay messages discarded by the old handler, so a fresh post-fix `!join` from the operator is still required to verify external receipt, persona mutation, and the actual Twitch `is_sent=true` reply. No real post-fix chat result is claimed.
+- Existing operator prompt/audit files were not edited or staged. The current local source/test changes have not yet been committed or pushed in this chronology.

@@ -1,0 +1,8 @@
+{% extends 'base.html' %}
+{% block title %}Live Twitch Chat · AI StoryForge{% endblock %}
+{% block head %}<meta http-equiv="refresh" content="3">{% endblock %}
+{% block body %}
+<section class="head-row"><div><span class="kicker">PRIVATE · HOST ONLY</span><h1>Live Twitch Chat</h1><p class="muted-text">Refreshes every three seconds. Incoming text and StoryForge replies are visible only in this signed-in host view.</p></div><div class="actions"><a class="button" href="/host">Host Studio</a><a class="button" href="/overlay" target="_blank">OBS story overlay</a></div></section>
+<section class="panel"><div class="section-head"><h2>Recent messages</h2><span class="tag">{{ 'AI REPLIES ON' if ai_chat_enabled else 'AI REPLIES OFF' }}</span></div><div class="chat-list">{% for item in recent_chat %}<article class="chat-item"><div class="chat-meta"><strong>{{ item.display }}</strong><time>{{ item.received_at }}</time><span class="tag">{{ item.outcome }}</span></div><p class="chat-message">{{ item.text }}</p>{% if item.reply %}<p class="chat-reply"><strong>StoryForge · {{ item.reply_status }}:</strong> {{ item.reply }}</p>{% else %}<small class="muted-text">Reply status: {{ item.reply_status.replace('_',' ') }}</small>{% endif %}</article>{% else %}<p class="muted-text">Waiting for a Twitch chat message. Confirm that the stream is live and send a message in its chat.</p>{% endfor %}</div></section>
+<section class="panel"><h2>Reply behavior</h2><p class="muted-text">Recognized commands receive a short fixed acknowledgement. Other messages receive an AI response only while the host setting is enabled. Check this page for queued, sent, or failed status.</p></section>
+{% endblock %}

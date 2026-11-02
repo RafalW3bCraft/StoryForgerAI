@@ -240,6 +240,17 @@ def test_unknown_and_informational_chat_commands_do_not_write_event_receipts(ser
         assert db.scalar(select(func.count()).select_from(EventReceipt)) == 1
 
 
+def test_ai_chat_reply_preference_persists_and_defaults_off(service):
+    assert service.ai_chat_replies_enabled() is False
+
+    service.set_ai_chat_replies_enabled(True)
+    restarted_service = StoryService(service.sessions)
+    assert restarted_service.ai_chat_replies_enabled() is True
+
+    restarted_service.set_ai_chat_replies_enabled(False)
+    assert service.ai_chat_replies_enabled() is False
+
+
 def test_invalid_vote_is_still_rate_limited(service, monkeypatch):
     clock = [100.0]
     monkeypatch.setattr(service, "_clock", lambda: clock[0])

@@ -19,13 +19,20 @@ from starlette.middleware.sessions import SessionMiddleware
 from starlette.templating import Jinja2Templates
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-from .ai import DemoGenerator, OpenAICompatibleGenerator
+from .ai import DemoGenerator, OpenAICompatibleChatResponder, OpenAICompatibleGenerator
 from .avatars import ACCESSORIES, ARCHETYPES, PALETTES, TRAITS, render_avatar
 from .config import Settings
 from .db import factory, make_engine
 from .graph import render_tree
 from .service import StoryError, StoryService
-from .twitch import TwitchConnector, exchange_code, login_url, save_host_token, user_for_token
+from .twitch import (
+    TwitchConnector,
+    exchange_code,
+    login_url,
+    save_host_token,
+    token_has_chat_write_scope,
+    user_for_token,
+)
 
 ROOT = Path(__file__).resolve().parent
 LOGGER = logging.getLogger(__name__)
@@ -97,7 +104,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     sessions = factory(engine)
     service = StoryService(sessions)
     generator = OpenAICompatibleGenerator(settings) if settings.ai_enabled else DemoGenerator()
-    connector = TwitchConnector(settings, sessions, service)
+    chat_responder = OpenAICompatibleChatResponder(settings) if settings.ai_enabled else None
+    connector = TwitchConnector(settings, sessions, service, chat_responder=chat_responder)
     generation_lock = asyncio.Lock()
 
     @asynccontextmanager
@@ -232,7 +240,43 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def host(request: Request):
         host_only(request)
         snapshot = service.snapshot()
-        return view(request, "host.html", snap=snapshot)
+        return view(
+            request,
+            "host.html",
+            snap=snapshot,
+            recent_chat=connector.recent_chat()[:12],
+            ai_chat_available=settings.ai_enabled,
+            ai_chat_enabled=settings.ai_enabled and service.ai_chat_replies_enabled(),
+        )
+
+    @app.get("/host/chat", response_class=HTMLResponse)
+    def host_chat(request: Request):
+        host_only(request)
+        return view(
+            request,
+            "host_chat.html",
+            recent_chat=connector.recent_chat(),
+            ai_chat_available=settings.ai_enabled,
+            ai_chat_enabled=settings.ai_enabled and service.ai_chat_replies_enabled(),
+        )
+
+    @app.post("/host/chat-settings")
+    def host_chat_settings(
+        request: Request,
+        csrf_token: str = Form(""),
+        enabled: bool = Form(False),
+    ):
+        host_only(request)
+        require_csrf(request, csrf_token)
+        if enabled and not settings.ai_enabled:
+            return go("/host", "AI chat replies require a configured live AI provider")
+        connector.set_ai_chat_replies_enabled(enabled)
+        notice = (
+            "AI chat replies enabled. Ordinary chat messages can be sent to the configured AI provider."
+            if enabled
+            else "AI chat replies disabled."
+        )
+        return go("/host", notice)
 
     @app.get("/overlay", response_class=HTMLResponse)
     def overlay(request: Request):
@@ -386,6 +430,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             if uid != settings.twitch_broadcaster_id or uid != settings.twitch_reader_id:
                 return go(settings.base_url, callback_failure)
             save_host_token(settings, sessions, token)
+            connector.chat_reply_status = (
+                "READY" if token_has_chat_write_scope(token) else "REAUTH_REQUIRED"
+            )
         request.session["role"] = "host" if role == "host" else "viewer"
         request.session["twitch_user_id"] = uid
         request.session["display_name"] = str(user.get("display_name", "Viewer"))[:80]
