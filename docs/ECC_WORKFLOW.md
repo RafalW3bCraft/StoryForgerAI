@@ -39,3 +39,15 @@ The cached ECC `agent-architecture-audit` and benchmark-optimization artifacts w
 The ECC TDD skill recommends Git checkpoints after RED and GREEN. Initial sandbox access could not write `.git`, so the requested local commit was created after explicit elevated filesystem approval: `144e3a3849ace53325211ecd5b77549fdc73ba1e`. The two operator-provided untracked audit/prompt files were not staged. No push was performed.
 
 The native ECC plugin should be installed and verified in the operator's Codex environment if available. The actual `/status` ID, live Twitch operation, successful model output, browser/OBS evidence, and submission artifacts remain outstanding. Full local tests and static checks are recorded in `docs/TEST_REPORT.md`.
+
+## Nov 2 finalization cycle
+
+The latest active tool environment did not expose ECC skill files or a registered native plugin. I used the repository's documented ECC-style cycle manually and do not claim a native ECC invocation for this turn.
+
+1. **AI response contract:** reproduced the live provider's HTTP-200 response failing `NarrativeProposal` because choices were objects instead of strings. Added an exact JSON example and plain-string instruction. A fresh live provider probe then passed Pydantic validation.
+2. **EventSub scheduling and malformed data:** moved synchronous `process_chat` to sequential `asyncio.to_thread` dispatch and added guards for malformed envelope/payload fields. Extended the loop responsiveness regression to a 50-message simulated burst. It stalled in the restricted sandbox's worker wakeup path, then passed outside the sandbox in 0.46 seconds with ordered receipt calls and no event-loop stall. This is only local simulated evidence.
+3. **Secret and database file permissions:** first added a failing regression showing new SQLite files were created as `0644`. Added owner-only POSIX database creation/restriction and applied it to the doctor write probe. Restricted the existing `.env` and database from `0644` to `0600`. New/existing-file tests passed.
+4. **Configuration loading:** removed import-time `.env` loading, made the CLI load it explicitly, and made live startup fail if the AI URL, key, or model is absent. Config and diagnostics regressions passed.
+5. **Final verification:** Python 3.13.15 full suite **76 passed**; coverage **85%** with ResourceWarnings treated as errors; Ruff, formatter, mypy (12 files), compileall, pip check, pip-audit and Bandit Medium/High checks passed. Current real health/DB evidence still has zero viewer notifications, personas, receipts, or votes.
+
+The two existing operator files stayed untouched and unstaged. No `/status` ID could be read from the tool interface. Native ECC installation/registration, live viewer testing, OBS recording, video publication, and Devpost submission are still external blockers.

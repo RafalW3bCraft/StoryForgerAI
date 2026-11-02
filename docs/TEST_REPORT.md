@@ -1,9 +1,54 @@
 # Test and verification report
 
 **Run date:** 2026-11-02 UTC
-**Checkout:** `main`; latest verified source/test commit `5c6b54946fbcdef2b3573618bf0b55070ac8581b`
-**Runtime:** Linux, Python 3.14.7. The project declares Python 3.12+.
-**Key installed versions:** FastAPI 0.162.0, Starlette 1.10.0, SQLAlchemy 2.1.6, Pydantic 2.14.2, cryptography 50.0.2, httpx 0.28.1, httpx2 2.16.0 (installed in the environment but no longer required by project tests), websockets 17.4, pytest 9.2.0, pytest-cov 7.1.0, Ruff 0.17.3, mypy 2.4.1.
+**Audited baseline:** `main`, `44fa0f4b33804826c78947ac781799a13f7f3940`; `origin/main` matched after fetch.
+**Latest verification runtime:** Linux, Python 3.13.15. The project declares Python 3.12+.
+**Test tools:** pytest 9.2.0, Ruff 0.17.3, mypy 2.4.1, pip-audit 2.10.1, Bandit 1.9.4.
+
+## Current finalization evidence — November 2, 2026
+
+The entries below are the current verification snapshot and supersede earlier test counts and external-state conclusions later in this chronology. They were run against the current code working tree derived from the audited baseline; the operator's two pre-existing untracked files were preserved.
+
+| Command / check | Result | Evidence |
+|---|---|---|
+| `/tmp/storyforge-py313-venv/bin/python -m pip install -e '.[dev]'` | PASS | Isolated Python 3.13.15 development install completed successfully after `pip-audit` and Bandit were added to the dev extra. |
+| `/tmp/storyforge-py313-venv/bin/python -m pytest -q -o faulthandler_timeout=15` | PASS | **76 passed in 8.06s**, exit 0. |
+| `/tmp/storyforge-py313-venv/bin/python -m pytest --cov=storyforge --cov-report=term-missing -q -W error::ResourceWarning` | PASS | **76 passed in 10.66s; 85% total coverage**, exit 0; no ResourceWarning. |
+| `/tmp/storyforge-py313-venv/bin/python -m ruff check src tests` | PASS | Exit 0; all checks passed. |
+| `/tmp/storyforge-py313-venv/bin/python -m ruff format --check src tests` | PASS | Exit 0; 19 files already formatted. |
+| `/tmp/storyforge-py313-venv/bin/python -m mypy src/storyforge` | PASS | Exit 0; no issues in 12 source files. |
+| `/tmp/storyforge-py313-venv/bin/python -m compileall -q src` | PASS | Exit 0. |
+| `/tmp/storyforge-py313-venv/bin/python -m pip check` | PASS | Exit 0; no broken requirements. Pip emitted only a local cache-permission warning. |
+| `/tmp/storyforge-py313-venv/bin/python -m pip_audit --skip-editable` | PASS | Exit 0; no known vulnerabilities among audited dependencies. Editable `ai-storyforge` distribution was skipped. |
+| `/tmp/storyforge-py313-venv/bin/python -m bandit -r src --ignore-nosec --severity-level medium --confidence-level medium -q` | PASS | Exit 0; no Medium/High findings at the requested thresholds. |
+| `git diff --check` | PASS | Exit 0. |
+| High-confidence credential-signature scan of six Git commits | PASS, limited | 0 signature matches; `.env` is ignored and no `.env`/SQLite file is tracked. Gitleaks is not installed, so this is not a full secret scanner. |
+
+### Redacted local and external diagnostics
+
+`/tmp/storyforge-py313-venv/bin/python -m storyforge doctor` listed all 13 supported variables by name without values. All required live-mode values passed local shape checks; `DEMO_ADMIN_PASSWORD` was marked `NOT USED IN LIVE MODE`; the SQLite write probe passed. The local `.env` and database, initially observed as `0644`, are now mode `0600`. This proves local configuration and permissions only.
+
+`/tmp/storyforge-py313-venv/bin/python -m storyforge doctor --live` exited 0 and reported:
+
+- Twitch OAuth API: **VERIFIED** stored host token and broadcaster identity.
+- `TWITCH_CLIENT_ID`, `TWITCH_BROADCASTER_ID`, `TWITCH_READER_ID`, and `TOKEN_ENCRYPTION_KEY`: externally **VERIFIED** by the live probe.
+- `TWITCH_CLIENT_SECRET`: **NOT VERIFIED**; the probe did not perform a fresh OAuth code exchange.
+- `AI_BASE_URL`, `AI_API_KEY`, and `AI_MODEL`: **VERIFIED** by a live response that passed `NarrativeProposal` validation.
+- Application runtime, active EventSub subscription, SQLite access, and saved AI provenance: **VERIFIED**.
+- Last real Twitch chat event: **NOT VERIFIED**. At the latest redacted health/DB inspection, all real notification and outcome counters were zero.
+- `APP_BASE_URL`: locally valid loopback origin; OAuth endpoint generation was previously checked as `http://localhost:8000/auth/callback`. Exact console configuration and fresh callback exchange were not independently re-run in this snapshot.
+
+The live database currently preserves a canonical node with `AI` provenance and an additional `AI` proposal with status `PENDING`; the story is at `REVIEW`. Counts: one host persona, zero viewer personas, seven persona revisions, zero EventSub receipts, and zero votes. This verifies local persistence, not cross-restart live viewer behavior or a completed current approval/vote cycle.
+
+### New regression evidence
+
+- Live-mode settings fail fast when any AI endpoint/key/model setting is absent; importing `Settings` no longer loads `.env` implicitly. Redacted configuration and diagnostics tests cover this boundary.
+- EventSub work now runs serially through `asyncio.to_thread`; malformed payload objects are ignored safely and aggregate outcome counters do not reveal text or Twitch IDs.
+- A 50-notification simulated EventSub burst regression passed outside the sandbox in **0.46s**. All 50 message IDs were processed in order; the heartbeat completed while processing continued. The same test stalled in the sandbox's worker-thread bridge and was interrupted with exit 130; the unrestricted rerun passed. Do not treat this simulated fixture as real Twitch event evidence.
+- Live model prompt now explicitly requires `choices` as two or three plain strings. The actual configured model probe passed after this fix.
+- SQLite application startup and the doctor write probe enforce owner-only permissions for file-backed DBs. New-file and existing-file regressions pass.
+
+Earlier dated sections below record chronological intermediate failures and results. In particular, old statements that the host token was missing, the provider timed out, no AI node existed, or the suite stalled are historical and are superseded by this current snapshot. Real chat, two-viewer voting, fresh client-secret OAuth, OBS capture, and submission state remain unverified.
 
 ## Nov 2 follow-up: OAuth origin and runtime diagnostics
 

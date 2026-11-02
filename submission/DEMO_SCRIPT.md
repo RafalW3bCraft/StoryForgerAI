@@ -5,10 +5,10 @@
 | Time | Show and say |
 |---|---|
 | 0:00–0:15 | Show the real Twitch channel beside StoryForge/OBS. Point to `LIVE_TWITCH` and the channel identity without showing credentials. Introduce chat-driven branching stories. |
-| 0:15–0:40 | Viewer A and Viewer B send `!join`. Show both distinct persistent personas and Python-generated avatars. Viewer A changes to `!persona scholar` and `!trait curious`. |
-| 0:40–1:05 | Host creates **The Last Library of Tomorrow**. Show the real AI request, structured proposal and `AI-GENERATED` provenance, then approve it as host. |
-| 1:05–1:35 | Start a vote. Show Viewer A sending `!vote A` and Viewer B sending `!vote B` in the actual channel. Show both votes in one persisted round, close it, and identify the single resolved choice. |
-| 1:35–2:00 | Show a real viewer contribution waiting for moderation. Approve it, then show the host adding an in-character line or plot twist and generating the next scene from approved context. |
+| 0:15–0:40 | Viewer A and Viewer B send standalone `!join` messages. Show two distinct personas. Viewer A sends `!persona scholar`, `!trait brave`, and `!avatar random`, at least one second apart. |
+| 0:40–1:05 | Resume the existing story. Show its real AI-generated proposal and provenance, then approve it as host. Do not create a replacement story over active data. |
+| 1:05–1:35 | Open a vote. Show Viewer A sending `!vote A` and Viewer B sending `!vote B` in the actual channel. Show both persisted votes, close the round, and show the canonical successor. |
+| 1:35–2:00 | Show a real viewer contribution waiting for moderation. Approve it, then show the host adding an in-character line or plot twist and generating the next scene from approved context, if time permits. |
 | 2:00–2:25 | Show the updated 1920×1080 OBS overlay, current canonical chapter, personas, vote result, connection status, and the retained alternative branch in `/graph.svg`. |
 | 2:25–2:45 | Show the actual Codex session and test results. Run `/status` in the primary Codex thread and show its genuine session ID. Show the ECC skills actually applied and distinguish skill guidance from native plugin execution. |
 
@@ -25,4 +25,4 @@
 - [ ] The video is under three minutes, publicly visible on YouTube, contains no unlicensed music/assets, and is checked before adding its URL to Devpost.
 - [ ] No simulated chat is presented as real Twitch evidence.
 
-**Status:** not recordable from the current environment. Live Twitch, live model, browser/OBS, `/status`, and the YouTube URL remain unverified or unavailable. No video link has been invented.
+**Status:** a script only; not recorded. The configured model response and a persisted AI-provenance scene are verified, but real viewer chat/votes, OBS visuals, `/status`, and the YouTube URL remain unverified or unavailable. No video link has been invented.

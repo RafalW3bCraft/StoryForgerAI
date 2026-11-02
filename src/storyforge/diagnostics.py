@@ -152,7 +152,11 @@ def _check_value(name: str, value: str, settings: Settings) -> str:
             return "FAIL"
     if name == "AI_BASE_URL":
         if not value:
-            return "NOT CONFIGURED" if not (settings.ai_api_key or settings.ai_model) else "FAIL"
+            return (
+                "FAIL"
+                if settings.mode == "live" or settings.ai_api_key or settings.ai_model
+                else "NOT CONFIGURED"
+            )
         try:
             parsed = urlsplit(value)
             local_http = (
@@ -176,7 +180,7 @@ def _check_value(name: str, value: str, settings: Settings) -> str:
         configured = bool(settings.ai_base_url or settings.ai_api_key or settings.ai_model)
         if value:
             return "PASS"
-        return "FAIL" if configured else "NOT CONFIGURED"
+        return "FAIL" if settings.mode == "live" or configured else "NOT CONFIGURED"
     return "NOT CHECKED"
 
 
@@ -197,6 +201,9 @@ def probe_database_writable(settings: Settings) -> str:
     try:
         if not settings.database:
             return "FAIL"
+        from .db import secure_sqlite_file
+
+        secure_sqlite_file(settings.database)
         connection = sqlite3.connect(settings.database, timeout=5)
         connection.execute("BEGIN IMMEDIATE")
         connection.execute("CREATE TABLE storyforge_doctor_probe (value INTEGER NOT NULL)")
@@ -448,7 +455,7 @@ def main(argv: list[str] | None = None) -> int:
         run_app()
         return 0
 
-    settings = Settings()
+    settings = Settings.from_environment()
     if args.probe:
         try:
             if args.probe == "twitch":

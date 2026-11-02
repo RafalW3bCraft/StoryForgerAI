@@ -1,72 +1,73 @@
-# AI StoryForge — release gate report
+# AI StoryForge release gate report
 
-**Assessment date:** November 2, 2026 UTC
-**Checkout:** `main`; latest source/test commit `5c6b54946fbcdef2b3573618bf0b55070ac8581b` is present locally and has not been pushed. The two pre-existing operator audit/prompt files remain untracked and untouched.
+**Assessment date:** November 2, 2026 (evidence through 09:03 UTC)
+
+**Audited baseline:** `44fa0f4b33804826c78947ac781799a13f7f3940` on `main`
+
+**Remote comparison:** `git fetch --prune origin` succeeded; `origin/main` matched the baseline SHA.
+
 **Decision:** **NOT READY** for hackathon submission or production.
 
-The official submission deadline is November 2, 2026 at 2:00 PM Pacific. Official rules require a project newly created during the submission period, Codex use/session ID, accessible repository, and a public YouTube demo under three minutes showing real Twitch operation and Codex. Git metadata shows the first commit (`d6aa6ff`) at 2026-11-01 07:20:22 UTC, within the stated submission period. The initial StoryForge MVP existed before this Codex pass; the commit date alone does not establish when every submitted component was created or provide an organizer-approved eligibility interpretation.
+This report supersedes older release decisions in the dated records below. The implementation changes and tests described here were checked in the live checkout. The two pre-existing operator files `StoryForgerAI_Codex_ECC_Finalization_Prompt.md` and `StoryForgerAI_Verified_Audit_2026-11-01.md` were preserved and not included in engineering changes.
 
 ## Evidence summary
 
 | Area | Result | Evidence |
 |---|---|---|
-| Python implementation and architecture | PASS | FastAPI/Jinja2/CSS and Python-generated SVG retained; no application JavaScript or TypeScript added. |
-| Regression checks | PASS | Full run outside the sandbox after the AI fix: **69 passed in 5.88s**. Coverage run: **69 passed, 84% total coverage**, no ResourceWarnings. |
-| Ruff, format, mypy, compile, pip check | PASS | Exact commands and environment are in `docs/TEST_REPORT.md`. |
-| Full HTTP acceptance suite | PASS | All three HTTP acceptance tests passed via async HTTPX ASGI transport during the 68-test run outside the sandbox. The sandbox-bound run stalls in its worker bridge; no application handlers were changed to accommodate it. |
-| Twitch configuration | PASS (local only) | Redacted doctor: 13 recognized variables locally PASS, SQLite writable PASS; values were not displayed. |
-| Twitch OAuth | PASS | `.venv/bin/python -m storyforge doctor --probe twitch` verified the encrypted host token and broadcaster identity. Current app origin and registered callback are `http://localhost:8000` and `http://localhost:8000/auth/callback`. |
-| EventSub | BLOCKED (chat evidence) | Health reports `LIVE_TWITCH` and `eventsub_subscribed=true`, but no real chat message has been observed. Verify channel chat delivery and real commands. |
-| AI provider | PASS | `.venv/bin/python -m storyforge doctor --probe ai` verified a real response against `NarrativeProposal` after the provider-specific fix. |
-| Host Studio saved AI scene and approval | PASS | Health reports `ai_last_generation=VERIFIED`; read-only SQLite state is `AI-GENERATED`, stage `VOTING`, and current canonical node provenance `AI`. No story text was recorded in the audit. |
-| Persona persistence | PASS locally | SQLite persona/revision/opt-out tests and host callback identity tests pass with mocked Twitch responses. Two real Twitch viewers and restart persistence remain unverified. |
-| Host controls and permissions | BLOCKED (external) | Full HTTP demo, CSRF, and host action tests pass locally. Real Twitch-host OAuth and browser-operated controls remain unverified. |
-| OBS and browser | BLOCKED | Health endpoint is reachable and SQLite snapshot verified, but no browser visual or OBS capture was performed. |
-| Security/dependency scan | BLOCKED (incomplete) | `pip-audit` reports no known vulnerabilities; Bandit reports zero Medium/High findings. Trivy, Gitleaks, and independent review remain unrun. |
-| Codex session record | BLOCKED | Substantive changes exist in the working tree; genuine `/status` ID unavailable through this execution interface. |
-| ECC engineering cycle | PASS, guidance only | Cached official TDD/security/test-collaboration/verification skill guidance was read and applied; native plugin is not installed. |
-| Git evidence and publication | BLOCKED | A local code/test commit exists, but no push was performed; remote URL is configured but public accessibility is unverified. |
-| YouTube video | FAIL | No video recorded or URL supplied. |
-| Devpost entry | FAIL | No completed submission. |
+| Python architecture | PASS | Python 3.12/3.13 application matrix; Python modules, Jinja2, CSS and Python-generated SVG only. No application JavaScript or TypeScript added. |
+| Automated checks | PASS | Python 3.13.15: **76 passed**; coverage run **76 passed, 85%**, with `ResourceWarning` errors enabled. Ruff, formatter, mypy, compileall, `pip check`, pip-audit and Bandit Medium/High checks exited 0. Exact commands are in `docs/TEST_REPORT.md`. |
+| Install and runtime configuration | PASS locally | `python -m pip install -e '.[dev]'` succeeded in the isolated Python 3.13.15 environment. `doctor` listed all 13 variables without values; local validations and the SQLite write probe passed. |
+| Local file permissions | PASS after fix | Existing `.env` and SQLite files were mode `0644`; they are now `0600`. New file-backed databases and the doctor probe enforce owner-only POSIX mode. Regression tests pass. |
+| Twitch host identity | PASS, limited | `doctor --live` verified the encrypted stored host token and broadcaster identity. This does **not** validate the currently configured client secret through a new authorization-code exchange. |
+| Twitch EventSub | PASS, subscription only | Live probe and app health confirmed `channel.chat.message` subscription. The protocol uses `channel.chat.message` v1 and `user:read:chat` scope as specified by [Twitch's subscription documentation](https://dev.twitch.tv/docs/eventsub/eventsub-subscription-types). |
+| Real Twitch chat | BLOCKED | At the latest health/DB check: `last_real_chat_event_seen=false`, notifications `0`, accepted `0`, ignored `0`, cooldown `0`, invalid `0`, duplicate `0`, processing errors `0`. No real `!join`, persona edit, `!vote`, two-viewer event, or branch transition is evidenced. |
+| AI provider | PASS, live probe | A real configured-model response passed `NarrativeProposal` validation. Prompt now specifies an exact JSON structure with two or three plain-string choices. |
+| Story persistence and host approval | PARTIAL | SQLite contains a canonical node with `AI` provenance and a pending AI proposal; story stage is currently `REVIEW`. Current snapshot: 1 host persona, 0 viewer personas, 7 revisions, 0 chat receipts, 0 votes. The current proposal still needs host approval; no live viewer vote can be counted. |
+| Browser and OBS | BLOCKED | HTTP route checks were previously successful, but this session has no real browser/OBS capture. No 1920×1080 OBS acceptance evidence or video exists. |
+| Security/dependency checks | PARTIAL PASS | pip-audit found no known vulnerabilities among audited dependencies; Bandit reported no Medium/High findings. A high-confidence credential-signature scan of all 6 Git commits found 0 matches; `.env` is ignored and no `.env`/database file is tracked. Gitleaks, Trivy, and an independent security review are unavailable/not run. |
+| Git source | PARTIAL | The configured GitHub remote was reachable with `git ls-remote`; before final changes, `origin/main` matched the audited baseline. The final commit and public judge access must be verified after push. |
+| Codex contribution | PARTIAL | This Codex pass made material code, regression-test, workflow and documentation changes. The primary-thread `/status` ID is not available to this tool interface and is still required. |
+| ECC | PARTIAL, guidance only | Earlier documented ECC skill guidance was applied as recorded in `docs/ECC_WORKFLOW.md`; this active environment did not provide the native ECC plugin. No plugin execution is claimed. |
+| New-project eligibility | BLOCKED / organizer interpretation needed | The repository's first commit falls in the event period, but the StoryForge MVP predates this Codex pass. A commit timestamp alone does not establish that the project was newly created during the submission window. |
+| YouTube and Devpost | FAIL / not complete | No qualifying public or unlisted YouTube video and no submitted Devpost entry were available. A saved draft is not a submission. |
 
-## Final release gates
+## Reproduced defects and corrections
+
+| Defect | Reproduction and correction | Verification |
+|---|---|---|
+| Live model returned a JSON object with invalid choice item types | The provider responded HTTP 200, but `choices` contained objects rather than `NarrativeProposal`'s required strings. The prompt now gives an exact JSON example and says each choice must be a plain string. | Live `doctor --live` returned `AI provider: VERIFIED`; response passed `NarrativeProposal`. Prompt regression is included in the 76-test run. |
+| Synchronous SQLite/service work could block the EventSub event loop | `consume()` called synchronous `process_chat()` in its async receive loop. It now awaits that call through `asyncio.to_thread`, one notification at a time, preserving order. | 50-event simulated burst regression passed outside the sandbox; IDs were processed in order, all 50 had accepted outcomes, and the event-loop heartbeat completed first. This is not real chat evidence. |
+| Malformed EventSub payload shapes could raise before boundary checks | Added dictionary/type checks at metadata, payload, subscription, event and message boundaries. | Malformed envelope and duplicate receipt regression passed. |
+| Live mode could silently run without a configured AI provider | Live settings now fail validation unless all three AI settings are present; importing settings no longer loads `.env` as a module side effect. | Configuration and app regressions pass; `doctor` distinguishes present/local validity from external checks. |
+| `.env` and SQLite data were group/world readable | Restricted the existing files and added an owner-only SQLite file setup used by application startup and the diagnostic write probe. | Existing-file doctor test and new-database test pass; observed modes are `0600`. |
+| Diagnostics could imply real chat success from subscription alone | `/health` exposes aggregate notification and outcome counters without chat text or Twitch IDs. | Health regression confirms no user IDs or raw messages are included; actual counters are currently zero. |
+
+## Gate decisions
 
 | Gate | Status | Cause and evidence needed to close |
 |---|---|---|
-| G0 — Clean environment installation | **PASS** | Fresh Python 3.13.15 venv installed `.[dev]` successfully; `pip check` reports no broken requirements. |
-| G1 — Automated tests and compilation | **PASS** | Outside-sandbox full run after the fix: 69 passed in 5.88s. Coverage run: 69 passed, 84% coverage, no ResourceWarnings. Ruff/format/mypy/compileall/pip check also pass. |
-| G2 — Lint, format, type, security | **BLOCKED** | Ruff/format/mypy/compile/pip-check, pip-audit, and Bandit Medium/High checks pass after the fixes. Trivy, Gitleaks, and independent security review remain; run them and record findings. |
-| G3 — Voting-state defect | **PASS** | Persisted pause origin, one-open-round SQLite index, tests for pause/resume/restart, votes while paused, and repeated close. |
-| G4 — Working Twitch OAuth | **PASS** | The redacted live probe verified the stored host token and broadcaster identity. The login route generated exactly `http://localhost:8000/auth/callback`, matching the registered URL. |
-| G5 — Real EventSub chat | **BLOCKED** | EventSub subscription is active, but no real chat event has been seen. Send and verify a real message from the configured channel; record no token. |
-| G6 — Persistent viewer personas | **BLOCKED** | SQLite persistence/revision/deletion tests pass locally, but two actual Twitch viewers and persistence across a live application restart were not verified. |
-| G7 — Real AI story generation | **PASS** | `doctor --probe ai` validated a live response; the app then saved an `AI-GENERATED` proposal and a host-approved canonical node with `AI` provenance. Health and read-only DB state confirm this; the story is now in `VOTING`. |
-| G8 — Host actions and permissions | **PASS** | Verified Twitch host identity, live Host Studio generation, host approval into canon, and transition to `VOTING`; automated CSRF and authorization regressions also pass. |
-| G9 — Live vote changes canon | **BLOCKED** | The story is waiting in `VOTING`, but no real viewer chat/vote event has been observed. Demonstrate real channel votes and a resulting canonical transition. |
-| G10 — OBS overlay visually verified | **BLOCKED** | No browser/OBS access. Record the live 1920×1080 source with actual personas, vote totals and branch transition. |
-| G11 — Codex implementation and session ID | **BLOCKED** | Codex changes and local code/test commit `5c6b54946fbcdef2b3573618bf0b55070ac8581b` are present, but primary-thread `/status` ID was unavailable. Capture the genuine ID using `/status`; no substitute is acceptable. |
-| G12 — ECC workflow applied | **PASS (skills only)** | ECC TDD/security/test-collaboration/verification guidance was applied. Native plugin was unavailable (`installed: []`); do not claim plugin execution. |
-| G13 — Repository complete and judge-accessible | **BLOCKED** | Local code/test commit exists and the GitHub remote is configured, but no push was performed and public/judge accessibility was not externally checked. Push the reviewed commits and verify judge access. |
-| G14 — YouTube demo ready/accessible | **FAIL** | No video exists. Record and publish a real Twitch/Codex demonstration under three minutes, then verify the URL. |
-| G15 — Devpost completed/submitted | **FAIL** | No submission exists. Complete all required fields and verify Devpost says Submitted before the deadline. |
+| A — Install, tests, type/lint/dependencies | PASS | Python 3.13.15 clean dev install and full checks recorded in `docs/TEST_REPORT.md`. GitHub Actions YAML exists, but a successful run on the final pushed SHA is still required. |
+| B — 13 runtime variables and live probes | PARTIAL | Redacted local check passed. Twitch host token/identity, EventSub subscription, and AI response are externally verified. A fresh OAuth exchange to validate `TWITCH_CLIENT_SECRET`, actual redirect registration, and full production database backup/restore are not verified. |
+| C — Real Twitch chat and voting | BLOCKED | Subscription active but no actual notification or command reached the app. Need two real viewers, durable persona revisions and receipts, votes, and canonical transition. |
+| D — AI story end to end | PARTIAL | Real model response and persisted AI provenance are evidenced; current AI proposal is pending in `REVIEW`. Host approval, real vote resolution, second-scene continuity, and cross-restart live workflow remain incomplete. |
+| E — Browser and OBS | BLOCKED | Need a real browser session and OBS Browser Source at 1920×1080; capture the current scene/personas/votes/branch transition with no secrets visible. |
+| F — Production security/operations | FAIL | No independent assessment, HTTPS deployment, backup/restore drill, rotation/migration, deployment/rollback exercise, cross-process coordination, or operational monitoring evidence. Single-process SQLite remains the supported MVP profile. |
+| G — Hackathon submission package | FAIL | Need live two-viewer Twitch/OBS demo, genuine `/status` ID, tested public source SHA, YouTube video under 3 minutes, eligibility determination, complete Devpost form and final **Submit** verification. |
 
-## Required corrective sequence
+## Required operator actions
 
-1. Preserve the two pre-existing untracked operator audit/prompt files. The relevant code, tests, and reports are committed locally; obtain the actual primary-session `/status` ID. Do not reuse an index-derived ID.
-2. Push the reviewed local commits from an authorized environment and verify judge access. No push is claimed here.
-3. Preserve the full-suite evidence; current Ruff, format, mypy, compile, dependency consistency, pip-audit, and Bandit Medium/High checks pass. Run Trivy/Gitleaks and an independent security review.
-4. Verify a real EventSub chat message, two viewer personas, live votes, the resulting canonical transition, and persistence across restart. Keep demo and live evidence distinct.
-5. Verify the real overlay in browser/OBS, record the required video, verify repository access, and submit the Devpost entry.
-6. Rotate credentials that may have appeared in the previously supplied external ZIP before any public release.
+1. In the primary Codex thread, run `/status` and record the actual session ID. Do not substitute this tool session or an environment/index ID.
+2. Reauthorize the broadcaster through the browser using the exact configured origin. This is needed to exercise the current Twitch client secret; do not expose the authorization code or callback URL in a recording.
+3. In the existing StoryForge channel, have two distinct viewers send standalone commands at least one second apart: `!join`; then one viewer `!persona scholar`, `!trait brave`, `!avatar random`; then each viewer `!vote A` or `!vote B`. First approve the pending proposal in Host Studio and open its vote. Do not create a new story over the active one. Confirm `/health`, SQLite receipts/revisions/votes, and the canonical transition.
+4. Verify the overlay in OBS at 1920×1080, record the demonstrated flow and Codex work in a YouTube video shorter than three minutes, then verify the link as an unauthenticated viewer.
+5. Rotate credentials that may have appeared in the earlier ZIP or diagnostic output. Reauthorize or migrate the encrypted token before rotating `TOKEN_ENCRYPTION_KEY`; do not strand the existing vault token.
+6. Resolve the “newly created during the Submission Period” ambiguity with the organizer. The initial MVP predates the Codex pass, so the first commit timestamp does not settle eligibility.
+7. Complete every Devpost field and click **Submit**, then verify the entry shows Submitted. Do not stop at Save Draft.
 
-## Nov 2 OAuth follow-up
+## Deadline and final verdicts
 
-The redacted `.env` report confirms live mode, 13 locally valid variables, SQLite writable, and loopback HTTP port 8000. The user's latest server output prints `http://127.0.0.1:8000`; use that exact `http://` URL. Uvicorn's repeated invalid-request warnings are consistent with a client sending TLS/HTTPS to its plain HTTP port; such a handshake cannot reach an app redirect. `ConfiguredOriginMiddleware` now sends every off-origin HTTP request directly to fixed `APP_BASE_URL`, before session handling, and callback error pages no longer expose a JSON detail object. A simulated HTTP 400 regression verifies safe status feedback without logging or reflecting the code/body. One read-only Twitch authorize request returned 302, but no user grant or token exchange occurred. These are not real OAuth success evidence.
+The [official rules](https://twitchcon-codex.devpost.com/rules) state November 2, 2026 at 2:00 PM Pacific Time, while the [FAQ](https://twitchcon-codex.devpost.com/resources) labels 2:00 PM PT as 9:00 PM UTC. The conversions conflict for this date. Follow the conservative earlier 21:00 UTC interpretation and the live Devpost countdown; do not wait until the last minute.
 
-Latest results: `doctor --probe twitch` **VERIFIED** host token and broadcaster identity; `doctor --probe ai` **VERIFIED** a real schema-valid model response; Host Studio saved and host-approved an `AI-GENERATED` canonical scene, and the story is in `VOTING`. `/health` reports HTTP 200, `LIVE_TWITCH`, active EventSub subscription, and no real chat event. No real `!join`, `!persona`, or `!vote` evidence exists.
+**HACKATHON SUBMISSION READY: NO** — genuine session ID, real viewer/chat/vote/OBS evidence, qualifying video, eligibility determination, final source verification, and submitted Devpost entry are absent.
 
-**HACKATHON SUBMISSION READY: NO**
-
-**PRODUCTION READY: NO**
-
-Production readiness remains NO: Twitch OAuth/EventSub and model operation are not verified, no production deployment or independent security assessment exists, and cooldown coordination is process-local. Credentials flagged by the prior audit must be rotated before public release. The full local HTTP test suite passed outside the sandbox; that test-runner limitation is not a product blocker. The code/test changes are committed locally as `144e3a3849ace53325211ecd5b77549fdc73ba1e`, with no remote push.
+**PRODUCTION READY: NO** — external live chat is unverified and production security/operations gates remain open.

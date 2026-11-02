@@ -45,6 +45,21 @@ def test_database_enforces_one_open_round_index(tmp_path):
     engine.dispose()
 
 
+def test_sqlite_database_file_is_owner_only(tmp_path):
+    import os
+    import stat
+
+    if os.name == "nt":
+        pytest.skip("POSIX file permission bits are not supported on Windows")
+
+    database = tmp_path / "private.db"
+    engine = make_engine("sqlite+pysqlite:///" + str(database))
+    try:
+        assert stat.S_IMODE(database.stat().st_mode) == 0o600
+    finally:
+        engine.dispose()
+
+
 def test_existing_database_migrates_generation_status_column(tmp_path):
     database = tmp_path / "legacy.db"
     with closing(sqlite3.connect(database)) as connection, connection:
@@ -282,6 +297,169 @@ def test_websocket_mock_reconnect_preserves_subscription(monkeypatch, tmp_path):
     assert connections[0].closed and connections[1].closed
     assert connector.status == "LIVE_TWITCH"
     assert service.persona("user-1").archetype == "scholar"
+    assert connector.last_chat_outcome == "ACCEPTED"
+    assert connector.chat_outcomes["ACCEPTED"] == 2
+    engine.dispose()
+
+
+def test_eventsub_chat_processing_does_not_block_event_loop_during_burst(monkeypatch, tmp_path):
+    import time
+
+    from storyforge import twitch
+
+    settings = Settings(
+        mode="demo",
+        database=str(tmp_path / "chat-worker.db"),
+        secret="x" * 40,
+        twitch_broadcaster_id="channel-1",
+        twitch_reader_id="channel-1",
+    )
+    engine = make_engine(settings.db_url)
+    sessions = factory(engine)
+    service = StoryService(sessions)
+
+    processed_ids = []
+
+    def slow_process_chat(message_id, *_args):
+        time.sleep(0.002)
+        processed_ids.append(message_id)
+        return "JOINED"
+
+    monkeypatch.setattr(service, "process_chat", slow_process_chat)
+    connector = TwitchConnector(settings, sessions, service)
+    messages = [
+        json.dumps(
+            {
+                "metadata": {"message_type": "session_welcome"},
+                "payload": {"session": {"id": "session-1", "keepalive_timeout_seconds": 30}},
+            }
+        )
+    ]
+    messages.extend(
+        json.dumps(
+            {
+                "metadata": {"message_type": "session_notification"},
+                "payload": {
+                    "subscription": {"type": "channel.chat.message", "version": "1"},
+                    "event": {
+                        "broadcaster_user_id": "channel-1",
+                        "message_id": f"chat-{index}",
+                        "chatter_user_id": f"viewer-{index}",
+                        "chatter_user_name": "Viewer",
+                        "message": {"text": "!join"},
+                    },
+                },
+            }
+        )
+        for index in range(50)
+    )
+
+    class FakeSocket:
+        async def recv(self):
+            message = messages.pop(0)
+            if not messages:
+                connector.stop()
+            return message
+
+        async def close(self):
+            pass
+
+    async def fake_connect(*_args, **_kwargs):
+        return FakeSocket()
+
+    async def no_op_subscribe(_token, _session_id):
+        return None
+
+    connector.subscribe = no_op_subscribe
+    monkeypatch.setattr(twitch.websockets, "connect", fake_connect)
+
+    async def run():
+        consume_task = asyncio.create_task(connector.consume("fake-token"))
+        heartbeat_task = asyncio.create_task(asyncio.sleep(0.01))
+        done, _pending = await asyncio.wait(
+            {consume_task, heartbeat_task}, return_when=asyncio.FIRST_COMPLETED
+        )
+        consume_finished_first = consume_task in done
+        await asyncio.gather(consume_task, heartbeat_task)
+        return consume_finished_first
+
+    assert asyncio.run(run()) is False
+    assert connector.last_chat_outcome == "ACCEPTED"
+    assert processed_ids == [f"chat-{index}" for index in range(50)]
+    assert connector.chat_notifications_received == 50
+    assert connector.chat_outcomes["ACCEPTED"] == 50
+    engine.dispose()
+
+
+def test_eventsub_malformed_chat_isolated_and_duplicate_receipt_counted(monkeypatch, tmp_path):
+    from storyforge import twitch
+
+    settings = Settings(
+        mode="demo",
+        database=str(tmp_path / "chat-boundary.db"),
+        secret="x" * 40,
+        twitch_broadcaster_id="channel-1",
+        twitch_reader_id="channel-1",
+    )
+    engine = make_engine(settings.db_url)
+    sessions = factory(engine)
+    service = StoryService(sessions)
+    connector = TwitchConnector(settings, sessions, service)
+
+    def notification(message_id, message):
+        return json.dumps(
+            {
+                "metadata": {"message_type": "session_notification"},
+                "payload": {
+                    "subscription": {"type": "channel.chat.message", "version": "1"},
+                    "event": {
+                        "broadcaster_user_id": "channel-1",
+                        "message_id": message_id,
+                        "chatter_user_id": "viewer-1",
+                        "chatter_user_name": "Viewer",
+                        "message": message,
+                    },
+                },
+            }
+        )
+
+    messages = [
+        json.dumps(
+            {
+                "metadata": {"message_type": "session_welcome"},
+                "payload": {"session": {"id": "session-1", "keepalive_timeout_seconds": 30}},
+            }
+        ),
+        notification("malformed-1", None),
+        notification("chat-1", {"text": "!join"}),
+        notification("chat-1", {"text": "!join"}),
+    ]
+
+    class FakeSocket:
+        async def recv(self):
+            message = messages.pop(0)
+            if not messages:
+                connector.stop()
+            return message
+
+        async def close(self):
+            pass
+
+    async def fake_connect(*_args, **_kwargs):
+        return FakeSocket()
+
+    async def no_op_subscribe(_token, _session_id):
+        return None
+
+    connector.subscribe = no_op_subscribe
+    monkeypatch.setattr(twitch.websockets, "connect", fake_connect)
+    asyncio.run(connector.consume("fake-token"))
+
+    assert connector.chat_notifications_received == 3
+    assert connector.chat_outcomes["IGNORED"] == 1
+    assert connector.chat_outcomes["ACCEPTED"] == 1
+    assert connector.chat_outcomes["DUPLICATE"] == 1
+    assert service.persona("viewer-1") is not None
     engine.dispose()
 
 
@@ -592,6 +770,9 @@ def test_featherless_qwen_disables_thinking_for_final_narrative(monkeypatch):
     )
 
     assert sent_payload["chat_template_kwargs"] == {"enable_thinking": False}
+    system_prompt = sent_payload["messages"][0]["content"]
+    assert '"choices": ["option one", "option two"]' in system_prompt
+    assert "plain string, never an object" in system_prompt
 
 
 def test_ai_provider_rejects_malformed_or_empty_content(monkeypatch):

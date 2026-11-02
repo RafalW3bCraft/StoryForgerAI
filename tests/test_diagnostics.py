@@ -1,3 +1,5 @@
+import pytest
+
 from storyforge.config import Settings
 
 
@@ -57,6 +59,9 @@ def test_diagnostic_flags_local_config_mismatch_without_claiming_external_succes
     assert rows["STORYFORGE_SECRET"].local == "FAIL"
     assert rows["APP_BASE_URL"].local == "FAIL"
     assert rows["TWITCH_READER_ID"].local == "FAIL"
+    assert rows["AI_BASE_URL"].local == "FAIL"
+    assert rows["AI_API_KEY"].local == "FAIL"
+    assert rows["AI_MODEL"].local == "FAIL"
     assert rows["AI_API_KEY"].external == "NOT CHECKED"
 
 
@@ -268,9 +273,27 @@ def test_database_write_probe_rolls_back_and_rejects_missing_parent(tmp_path):
     assert probe_database_writable(missing_parent) == "FAIL"
 
 
+def test_database_write_probe_restricts_existing_file_permissions(tmp_path):
+    import os
+    import stat
+
+    if os.name == "nt":
+        pytest.skip("POSIX file permission bits are not supported on Windows")
+
+    from storyforge.diagnostics import probe_database_writable
+
+    database = tmp_path / "storyforge.sqlite3"
+    database.touch(mode=0o644)
+    database.chmod(0o644)
+    assert probe_database_writable(Settings(database=str(database))) == "PASS"
+    assert stat.S_IMODE(database.stat().st_mode) == 0o600
+
+
 def test_doctor_reports_live_runtime_evidence_as_unverified_by_default(
     monkeypatch, capsys, tmp_path
 ):
+    from types import SimpleNamespace
+
     from storyforge import diagnostics
 
     settings = Settings(
@@ -287,7 +310,7 @@ def test_doctor_reports_live_runtime_evidence_as_unverified_by_default(
         ai_api_key="ai-private-key",
         ai_model="model-private-name",
     )
-    monkeypatch.setattr(diagnostics, "Settings", lambda: settings)
+    monkeypatch.setattr(diagnostics, "Settings", SimpleNamespace(from_environment=lambda: settings))
     monkeypatch.setattr(diagnostics.os, "environ", {})
 
     diagnostics.main(["doctor"])
@@ -398,6 +421,10 @@ def test_health_endpoint_reports_only_integration_status(tmp_path):
 
     assert report["eventsub_subscribed"] is True
     assert report["last_real_chat_event_seen"] is True
+    assert report["chat_notifications_received"] == 0
+    assert report["last_chat_command_outcome"] == "NOT_SEEN"
+    assert "private-user-id" not in str(report)
+    assert "private-chat-text" not in str(report)
     assert report["ai_last_generation"] == "VERIFIED"
     assert "A narrow stair" not in str(report)
     assert "client-secret-private" not in str(report)

@@ -1,40 +1,33 @@
 # AI StoryForge — Every Viewer Becomes a Character. Every Choice Becomes a Story.
 
-**Submission copy draft. Do not paste as final until the live demo, repository access, Codex session ID, eligibility, and all claims are verified.**
+**Submission copy draft. Not a completed Devpost submission. Fill the actual Codex session ID and video URL only after verifying them, then review the eligibility concern with the organizer.**
 
 ## Inspiration
 
-Twitch chat moves quickly, and most audience choices disappear as soon as a poll ends. AI StoryForge turns a stream into a shared story where viewers return as persistent characters, influence decisions, and see their choices shape a canonical timeline.
+Twitch chat moves quickly, and audience ideas can disappear when a poll ends. AI StoryForge gives a streaming community a shared, branching story where viewers can return as persistent fictional characters and shape the next canonical scene.
 
 ## What it does
 
-The streamer directs the story as its Story Master and appears as a character. Viewers join with Twitch-linked personas, customize archetypes and traits, and receive original procedural SVG avatars. Viewers vote on branching scene choices and submit lines or twists for host review. The host approves proposals and contributions before they become part of the story. SQLite preserves the canonical head and alternative branches across restarts. A browser-source overlay presents the story, character cards, and voting state for OBS.
+The streamer acts as Story Master. Viewers join through Twitch chat, build persistent personas with procedural SVG avatars, contribute bounded lines or plot twists for host review, and vote on scene choices. The host reviews AI-generated proposals and contributions before they become canonical. SQLite stores personas, revisions, votes, the current story head, and alternate branches. A Jinja2 browser-source page displays the story for OBS and refreshes every three seconds.
 
 ## How it is built
 
-The application is Python-first: FastAPI, Jinja2, CSS, SQLAlchemy, SQLite, Pydantic, httpx, websockets, and Python-generated SVG. It has no application-authored JavaScript or TypeScript. Twitch identity is bound to immutable user IDs; the host has separate authorization and CSRF-protected controls. EventSub welcome, keepalive, reconnect, revocation, duplicate delivery, and broadcaster identity checks are implemented. The OBS page uses a three-second refresh rather than server push.
-
-Narrative proposals use a configurable OpenAI-compatible chat completion endpoint and are validated against a Pydantic schema before the host can approve them. A deterministic DEMO generator supports offline evaluation and is never silently substituted for a failed live model request.
+AI StoryForge uses Python, FastAPI, Jinja2, CSS, SQLAlchemy, SQLite, Pydantic, HTTPX and WebSockets. It contains no application-authored JavaScript or TypeScript. Twitch identity is bound to immutable Twitch user IDs. EventSub uses the `channel.chat.message` subscription with host-only authorization and rejects messages from an unexpected broadcaster. OAuth state is held in the signed session; encrypted host tokens remain server-side. Scene output is validated against `NarrativeProposal` before persistence. The deterministic offline generator is marked DEMO and is not a fallback for failed live generation.
 
 ## How Codex contributed
 
-The original MVP existed before this Codex engineering pass. Codex made substantive changes to EventSub identity and subscription validation, AI truncation/endpoint checks, live OAuth configuration validation, chat cooldowns, redacted environment diagnostics, and regression coverage. The final Codex `/status` session ID must be added from the actual primary Codex session before submission; no session-index ID is substituted here.
+The existing MVP predates this Codex engineering pass. In the recorded Codex work, Codex added or repaired EventSub identity and subscription validation, OAuth origin handling, live configuration checks, AI response validation, chat cooldown and replay handling, aggregate redacted diagnostics, database permission enforcement, the Python 3.12/3.13 CI workflow, regression tests, and release documentation. The final Git revision and actual primary-thread Codex session ID must be verified before submission.
 
-## How ECC contributed
+## Verification and limitations
 
-The available ECC TDD, security-review, test-collaboration, and verification-loop skill guidance was read and applied. The native ECC plugin was not installed in this runtime, so this entry does not claim a native plugin run.
+The latest Python 3.13.15 run passed **76 tests** with **85% coverage**; Ruff, formatting, mypy, compileall, dependency checks, pip-audit and Bandit Medium/High checks passed. A live configured-model response passed `NarrativeProposal` validation. The stored Twitch host token/broadcaster identity and active EventSub subscription are verified, but actual viewer chat messages, persona changes, votes, and the resulting canonical branch transition have not yet been evidenced. The current story has a pending AI proposal in `REVIEW`; a previous canonical node has AI provenance. No browser/OBS capture or qualifying demonstration video has been recorded.
 
-## Verification and current status
+The first Git commit is in the submission window, but the original MVP predates this Codex pass. The first commit timestamp alone cannot establish that this is a newly created project under the event rules; organizer interpretation is needed. This entry remains a draft until that question and all live demonstration requirements are resolved.
 
-Local verification reports 69 passed, including the three HTTP acceptance tests, and 84% coverage. Ruff, formatting, mypy, compilation, `pip check`, pip-audit, and Bandit Medium/High checks pass. The redacted live Twitch probe verifies broadcaster identity. A real model response passed narrative validation and Host Studio saved and approved an `AI-GENERATED` canonical scene. Real viewer chat/votes and OBS visuals remain unverified.
+## Links and required fields
 
-Twitch host OAuth and the configured AI provider passed their redacted live probes. Host Studio saved and approved an `AI-GENERATED` canonical scene; the story is waiting in `VOTING`. The app reports an active EventSub subscription, but no real chat event or viewer vote has been observed. Browser/OBS visuals were not captured. Do not claim full live operation until real chat, viewer votes, and OBS presentation are demonstrated.
-
-The initial MVP predates this Codex session. The hackathon rules require a project newly created during the submission period; the project’s eligibility must be checked against the complete development history. Do not claim organizer approval that has not been obtained.
-
-## Links and submission state
-
-- Configured repository remote: <https://github.com/RafalW3bCraft/StoryForgerAI>
-- Public/judge access: not yet verified for the completed working tree.
-- Demo video: not recorded; no URL exists.
-- Devpost status: not submitted.
+- Source repository: <https://github.com/RafalW3bCraft/StoryForgerAI>
+- Demo video: **not recorded**
+- Primary Codex `/status` session ID: **not available**
+- Devpost status: **not submitted**
+- ECC native plugin: **not installed in this runtime**; do not claim plugin execution.

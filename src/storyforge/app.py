@@ -91,7 +91,7 @@ class ConfiguredOriginMiddleware:
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
-    settings = settings or Settings()
+    settings = settings if settings is not None else Settings.from_environment()
     settings.validate()
     engine = make_engine(settings.db_url)
     sessions = factory(engine)
@@ -219,6 +219,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "twitch": connector.status,
             "eventsub_subscribed": connector.status == "LIVE_TWITCH",
             "last_real_chat_event_seen": connector.last_event is not None,
+            **connector.chat_health(),
             "ai_provider": "CONFIGURED" if settings.ai_enabled else "DEMO",
             "ai_last_generation": ai_generation,
         }
@@ -500,7 +501,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 def main() -> None:
     import uvicorn
 
-    settings = Settings()
+    settings = Settings.from_environment()
     settings.validate()
     print(f"Open StoryForge at {settings.base_url}", flush=True)
     if settings.base_url.startswith("http://"):

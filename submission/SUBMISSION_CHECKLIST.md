@@ -1,47 +1,44 @@
 # Codex × TwitchCon submission checklist
 
 **Assessment date:** November 2, 2026 UTC
-**Current decision:** **NOT READY**. Keep this checklist open until every mandatory item has direct evidence.
 
-## Engineering work completed in this Codex pass
+**Current decision:** **NOT READY**. The deadline shown by the official pages is November 2 at 2:00 PM Pacific. The rules and FAQ differ on UTC conversion; use the earlier 21:00 UTC interpretation and the live Devpost countdown.
 
-- [x] Preserved the existing Python/FastAPI/Jinja2/SQLite product and the two pre-existing untracked operator prompt/audit files.
-- [x] Added regression coverage for EventSub broadcaster/subscription validation, OAuth callback outcomes, AI truncation and endpoint safety, chat cooldowns, persisted generation provenance, and redacted diagnostics.
-- [x] Added a redacted environment diagnostic and bounded optional live API probes.
-- [x] Persisted scene-generation outcomes and made the UI distinguish `FAILED`, `AWAITING`, `AI-GENERATED`, and `DEMO-GENERATED`; canonical approval preserves provenance.
-- [x] Throttled recognized commands across per-viewer command types, suppressed receipts for unknown/info commands, bounded rejected-event dedupe, and clarified web/OBS feedback.
-- [x] Restricted demo host-password login to loopback and redacted secret fields from `Settings.__repr__`.
-- [x] Kept every browser request on `APP_BASE_URL` with a fixed-origin pure ASGI redirect before session handling; callback errors do not show JSON details and Uvicorn access logs omit OAuth query strings.
-- [x] Full current suite: 69 passed, including all three HTTP acceptance tests; coverage is 84%. Ruff, formatting, mypy, compileall, `pip check`, pip-audit, and Bandit Medium/High checks pass. Exact commands are in `docs/TEST_REPORT.md`.
-- [x] Added safe OAuth exchange failure feedback with only HTTP status/category; regression confirms the one-time code and provider body are absent from UI output and logs.
-- [x] Added startup guidance to use the exact printed HTTP address and clarified the TLS reverse-proxy requirement for an HTTPS `APP_BASE_URL`.
-- [x] `pip-audit` found seven advisories in the former `cryptography 47.0.0` pin; raised the minimum to 50.0.2 and confirmed no known dependency vulnerabilities on rerun.
-- [x] Bandit found two Medium SQL-string warnings in the SQLite diagnostic; changed the probe to a fixed-name main-database table created and rolled back inside a write transaction and reran with zero Medium/High findings. Reviewed the remaining 13 Low findings as non-exploitable for their specific uses.
-- [x] Read and applied available official ECC TDD, security-review, test-collaboration, and verification-loop skill guidance. Native ECC plugin was unavailable; no native plugin invocation is claimed.
+## Completed engineering work
 
-## Mandatory submission evidence still required
+- [x] Preserved the Python/FastAPI/Jinja2/SQLite application, existing personas and active story data; no authored JavaScript or TypeScript was added.
+- [x] Added regression coverage for redacted diagnostics, explicit live AI configuration, provider JSON shape, malformed EventSub payloads, duplicate receipts, nonblocking ordered chat processing, and private SQLite file modes.
+- [x] Added a Python 3.12/3.13 GitHub Actions workflow with least-privilege contents access, timeouts, concurrency handling, test, coverage, Ruff, mypy, dependency and Bandit checks. A real Actions run on the final pushed SHA remains required.
+- [x] Latest complete Python 3.13.15 suite: **76 passed**; coverage: **85%**, with `ResourceWarning` errors enabled. Ruff, formatter, mypy, compilation, `pip check`, pip-audit and Bandit Medium/High checks passed. See `../docs/TEST_REPORT.md`.
+- [x] Reproduced the configured provider's invalid choice shape; explicit JSON shape instructions now produce a live response that passed `NarrativeProposal` validation.
+- [x] Moved synchronous chat processing off the async WebSocket receive loop; the 50-event local regression completed in order without blocking the heartbeat.
+- [x] Changed the existing local `.env` and SQLite permissions from `0644` to `0600`; new database files and the diagnostic probe also restrict POSIX permissions.
+- [x] Added aggregate chat outcome health counters; no raw chat messages or Twitch user IDs are published by `/health`.
 
-- [x] Complete the full local test gate. The sandbox-bound attempt stalled in its worker bridge, then the complete suite passed outside the sandbox: 69 passed, including all HTTP acceptance tests.
-- [x] Complete a real Twitch broadcaster OAuth flow and verify broadcaster identity. Redacted `doctor --probe twitch` reports the host token and broadcaster identity verified. `APP_BASE_URL` and registered callback match `http://localhost:8000` and `http://localhost:8000/auth/callback`.
-- [ ] Verify EventSub `channel.chat.message` delivery on the real channel, then prove real `!join`, persona customization, and votes modify persisted state. Health reports a subscription, but no real chat message has been observed.
-- [x] Generate through Host Studio and approve a real provider scene. Read-only SQLite evidence confirms `generation_status=AI-GENERATED`, story stage `VOTING`, and current canonical node provenance `AI`.
-- [ ] Complete the host/viewer/voting/canonical-branch/restart acceptance flow with two actual viewers.
-- [ ] Verify the overlay in a browser and OBS at 1920×1080 using the real running session.
-- [ ] Capture the actual primary Codex `/status` session ID. No substitute ID is acceptable.
-- [x] Create a reviewable local code/test commit: `5c6b54946fbcdef2b3573618bf0b55070ac8581b`.
-- [ ] Push the reviewed commit(s) and verify judge access to the repository. No push was performed; remote visibility is unverified.
-- [ ] Review eligibility against the official “newly created” rule and obtain an organizer interpretation if needed. The first Git commit is dated within the entry period, but the original MVP predates this Codex pass and the timestamp alone does not establish eligibility.
-- [ ] Record and verify a public YouTube demo shorter than three minutes showing real Twitch operation and the actual Codex development session; add its real URL only after verification.
-- [ ] Complete all Devpost fields and verify the entry is marked **Submitted** before November 2, 2026, 2:00 PM PST.
-- [ ] Confirm rotation of credentials that may have appeared in the previously supplied ZIP or this pass's earlier pytest failure output before live verification/publication; do not record them in this repository or demo.
+## External evidence and remaining requirements
 
-## External state verified in this pass
+- [x] **Stored Twitch host identity:** redacted live probe verified the encrypted host token and broadcaster ID.
+- [ ] **Current Twitch client secret:** a fresh browser authorization-code exchange was not completed; the stored token alone does not verify the configured client secret.
+- [x] **EventSub subscription:** live probe and running health check verified `LIVE_TWITCH` and an enabled `channel.chat.message` subscription.
+- [ ] **Real chat:** latest redacted health and SQLite inspection show zero chat notifications/receipts. No real `!join`, `!persona`, `!trait`, `!avatar`, `!vote`, or canonical vote transition is evidenced.
+- [ ] **Two real viewer identities:** current DB has zero viewer personas; demonstrate two distinct Twitch IDs and persisted persona revisions.
+- [x] **Real model request:** provider returned content that passed `NarrativeProposal` validation.
+- [ ] **Current host approval and vote:** the preserved active story is at `REVIEW`; its current `AI` proposal is `PENDING`. Host Studio must approve it and open its vote before accepting viewer votes. An earlier canonical node with `AI` provenance remains in the story.
+- [ ] **Live continuity/restart:** prove a real vote resolves into a canonical successor, then restart and verify personas, votes, and AI provenance remain.
+- [ ] **Browser and OBS:** capture the actual overlay in OBS at 1920×1080 with live personas, votes, and branch transition. No visual capture exists yet.
+- [ ] **Codex session ID:** run `/status` in the primary Codex thread and record its genuine ID. This tool interface cannot retrieve it; do not substitute an index or environment variable.
+- [ ] **ECC evidence:** native ECC plugin is not installed in this runtime. Existing documented ECC skill-guidance use is distinct from native plugin use; do not claim plugin execution.
+- [ ] **Public tested source:** final implementation commit must be pushed and `origin/main` plus public GitHub page verified against its exact SHA. Do not include `.env`, database, cache, or operator audit/prompt files.
+- [ ] **Eligibility:** ask the organizer how “newly created during the Submission Period” applies. The first Git commit is dated during the event, but the pre-existing MVP predates the current Codex pass and commit timestamp alone does not prove eligibility.
+- [ ] **YouTube demo:** record a public or unlisted video under 3 minutes showing real Twitch messages, the host-approved AI scene, vote-to-canon transition, OBS, and Codex development. Check that it contains no credentials, OAuth callback parameters, private chat, or unlicensed material. No video URL exists.
+- [ ] **Devpost:** complete all required fields in English, enter the real source/video/session URLs, then click **Submit** and verify the project is marked Submitted. Save Draft is not submission. No submission status is claimed.
+- [ ] **Credential rotation:** rotate any Twitch, AI, session, demo-password, and Fernet values that may have appeared in the earlier shared ZIP or diagnostic output. Reauthorize/migrate the token vault before replacing the Fernet key.
 
-- [x] Twitch OAuth: **verified**. Redacted `doctor --probe twitch` confirmed the host token and broadcaster identity; callback is `http://localhost:8000/auth/callback`.
-- [ ] EventSub and live chat: **partial**. Health reports the subscription active, but no real message or `!join`, `!persona`, or `!vote` has succeeded in evidence.
-- [x] AI provider and host approval: **verified**. `doctor --probe ai` passed `NarrativeProposal` validation; Host Studio then persisted an `AI-GENERATED` scene and approved it into the canonical story.
-- [ ] Browser/OBS: **not verified**. The application health endpoint and database-backed snapshot responded in the final live doctor, but no browser visual or OBS capture exists.
-- [ ] GitHub judge access: **not verified**. The code/test commit exists locally but has not been pushed; remote visibility is unverified.
-- [ ] Codex session ID, video URL, and Devpost submission: **not available**.
+## Draft asset status
 
-See [the release gate report](../docs/RELEASE_REPORT.md) and [the exact test evidence](../docs/TEST_REPORT.md). The official rules require an eligible newly created project, Codex evidence, accessible repository, a qualifying YouTube video, and a completed Devpost submission: https://twitchcon-codex.devpost.com/rules
+- Source repository: <https://github.com/RafalW3bCraft/StoryForgerAI>
+- Demo video URL: **not recorded**
+- Primary Codex `/status` ID: **not available**
+- Devpost project link/status: **not available / not submitted**
+
+Use the evidence in `../docs/FINAL_EVIDENCE_REPORT.md` and the current release decision in `../docs/RELEASE_REPORT.md`. The official [rules](https://twitchcon-codex.devpost.com/rules) and [resources/FAQ](https://twitchcon-codex.devpost.com/resources) require the project eligibility, repository, description, Codex session ID, qualifying video, and a completed submission.

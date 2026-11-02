@@ -9,8 +9,6 @@ from urllib.parse import urlsplit
 
 from dotenv import load_dotenv
 
-load_dotenv()
-
 
 @dataclass(frozen=True)
 class Settings:
@@ -42,6 +40,12 @@ class Settings:
     ai_base_url: str = field(default_factory=lambda: os.environ.get("AI_BASE_URL", ""))
     ai_api_key: str = field(default_factory=lambda: os.environ.get("AI_API_KEY", ""), repr=False)
     ai_model: str = field(default_factory=lambda: os.environ.get("AI_MODEL", ""))
+
+    @classmethod
+    def from_environment(cls) -> Settings:
+        """Load the CLI's .env file explicitly; importing settings has no side effects."""
+        load_dotenv()
+        return cls()
 
     def validate(self) -> None:
         if self.mode not in {"demo", "live"}:
@@ -96,6 +100,8 @@ class Settings:
             from cryptography.fernet import Fernet
 
             Fernet(self.token_key.encode())
+            if not all((self.ai_base_url, self.ai_api_key, self.ai_model)):
+                raise ValueError("Live mode requires AI_BASE_URL, AI_API_KEY and AI_MODEL")
         if not self.database:
             raise ValueError("Database path is required")
 

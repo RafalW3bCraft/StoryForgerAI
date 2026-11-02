@@ -97,17 +97,17 @@ python -m compileall -q src
 python -m pip check
 ```
 
-Use the supported Python 3.12+ environment and development dependencies installed above. The final full run outside the sandbox passed all 68 tests with 84% coverage. A sandbox-bound run can stall in AnyIO worker dispatch; see `docs/TEST_REPORT.md` for the separate environment evidence. Local simulator events are not live Twitch evidence.
+Use Python 3.12 or 3.13 for the supported CI matrix and install the development dependencies above. The latest Python 3.13.15 full run passed 76 tests with 85% coverage and `ResourceWarning` treated as an error. Ruff, formatting, mypy, compileall, dependency consistency, pip-audit, and Bandit Medium/High checks also passed. A sandbox-bound worker-thread regression stalled in this environment; the same 50-event test passed outside the sandbox. Exact commands and limits are in `docs/TEST_REPORT.md`. Local simulator events are not live Twitch evidence.
 
 ## Known limitations
 
-- Twitch host OAuth and a schema-valid live model response passed redacted probes; Host Studio has saved and approved an `AI-GENERATED` canonical scene. Real EventSub chat/votes and browser/OBS visuals still need verification.
+- The stored host token and broadcaster identity, active EventSub subscription, and a real schema-valid model response passed redacted live probes. Host Studio previously saved and approved an `AI-GENERATED` canonical scene. The current live chat counters show no received notifications, so real `!join`, persona edits, votes and branch transitions remain unverified. A fresh OAuth code exchange using the currently configured client secret is also unverified.
 - Single-process SQLite and in-memory command cooldowns suit this MVP, not multi-worker deployment.
 - Informational chat commands do not send outbound Twitch messages.
 - The overlay refreshes the full document; no camera, voice, generated-image or other optional media feature is implemented.
-- The app has not received an independent production security assessment. Use HTTPS, protect the database and secrets, and rotate any credentials that may have appeared in an external archive or log.
+- The app has not received an independent production security assessment. Local `.env` and SQLite database files are now restricted to owner-only POSIX permissions. Rotate credentials that may have appeared in the previously shared ZIP or earlier diagnostic output; reauthorize or migrate the encrypted token before rotating its Fernet key.
 - The hackathon requires a newly created project during its submission period, a real Codex session ID, accessible source repository, a public YouTube demo under three minutes showing real Twitch and Codex, and a completed Devpost submission. See `submission/SUBMISSION_CHECKLIST.md`; no submission-ready claim is made here.
 
 ## Provenance and source
 
-The configured Git remote is `https://github.com/RafalW3bCraft/StoryForgerAI.git`. Repository accessibility and the current working-tree changes still need release verification. The initial MVP predates this Codex pass; no Poketar source files, franchise artwork, or external character assets were copied. See `docs/POKETAR_PROVENANCE.md`.
+The configured Git remote is `https://github.com/RafalW3bCraft/StoryForgerAI.git`; see the release report for the exact pushed revision and judge-access check. The initial MVP predates this Codex pass. Its first Git commit falls within the stated submission window, but that timestamp alone does not establish the project's eligibility as newly created. No Poketar source files, franchise artwork, or external character assets were copied. See `docs/POKETAR_PROVENANCE.md`.

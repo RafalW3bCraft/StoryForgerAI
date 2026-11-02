@@ -1,9 +1,9 @@
 # Codex engineering log
 
-**Date:** 2026-11-01 UTC
+**Date:** 2026-11-02 UTC
 **Primary Codex `/status` ID:** not captured; this execution interface does not expose the primary Codex `/status` command. Do not use a local session-index ID as a substitute.
-**Git commit:** latest source/test commit `5c6b54946fbcdef2b3573618bf0b55070ac8581b`; no push. The two operator-provided untracked audit/prompt files remain untouched.
-**Starting revision:** `d6aa6ff` on `main`.
+**Git baseline:** `44fa0f4b33804826c78947ac781799a13f7f3940` on `main`; `origin/main` matched after fetch at the start of finalization. The two operator-provided untracked audit/prompt files remain untouched.
+**Finalization changes:** material Codex-authored code/tests/docs are recorded below; their committed revision is recorded after the final commit.
 
 The initial AI StoryForge MVP predates this Codex pass and was bootstrapped in its original ChatGPT/container context. This log records only the work performed in the current Codex engineering pass; it does not attribute the original MVP to Codex.
 
@@ -106,3 +106,16 @@ The current `.env` values were not printed and no live request was made. The aud
 - RED/GREEN: `test_featherless_qwen_disables_thinking_for_final_narrative` failed before the fix because the request omitted the option; after the fix it passed. The live full-prompt doctor probe now reports **AI provider: VERIFIED** with `NarrativeProposal` validation.
 - Additional live check: `.venv/bin/python -m storyforge doctor --probe twitch` reports **VERIFIED** host token and broadcaster identity. Restarted StoryForge at `http://localhost:8000`; `/health` returns 200, `LIVE_TWITCH`, and an active EventSub subscription. Host Studio subsequently saved and approved the AI proposal: a read-only database check confirmed `AI-GENERATED`, stage `VOTING`, and an AI-provenance canonical node. No real chat message has yet been seen.
 - Verification after the fix: full suite **69 passed**; coverage **84%** with `-W error::ResourceWarning`; AI integration tests **4 passed**, AI diagnostic tests **4 passed**; Ruff, format, mypy, and compileall passed. Code/test commit: `5c6b54946fbcdef2b3573618bf0b55070ac8581b`; no push.
+
+## Nov 2 finalization audit
+
+- Compared live checkout `main` to `origin/main` after `git fetch --prune origin`; both were `44fa0f4b33804826c78947ac781799a13f7f3940`. Preserved the operator's two untracked audit/prompt files.
+- Fixed the model output contract after a real request showed `choices` entries as objects and failed Pydantic validation. The prompt now states the exact JSON shape and requires plain-string choices. A bounded `doctor --live` run then validated a real model proposal.
+- Fixed sync database/service work in the EventSub async receive path with sequential `asyncio.to_thread` execution. Added safe malformed-message guards and redacted aggregate health counters for notification and command outcomes. A simulated 50-event regression verifies ordered processing and event-loop responsiveness; it is not live Twitch evidence.
+- Reproduced SQLite DB creation as mode `0644`; implemented owner-only (`0600`) POSIX file setup in application startup and the doctor write probe. Restricted the existing `.env` and DB modes to `0600` without modifying story rows. Added existing/new database permission regressions.
+- Removed implicit dotenv loading at module import and made CLI/app startup load `.env` explicitly. Live mode now fails fast when any AI endpoint/key/model setting is absent.
+- Latest Python 3.13.15 evidence: **76 passed in 8.06s**, coverage **85%** (76 passed in 10.66s, ResourceWarnings are errors); Ruff, formatter, mypy, compileall, pip check, pip-audit and Bandit Medium/High all exit 0. Exact commands are in `docs/TEST_REPORT.md`.
+- Redacted `doctor --live`: stored Twitch host identity, EventSub subscription, runtime, saved AI provenance and live schema-validated model response **VERIFIED**; current configured Twitch client secret was **NOT VERIFIED** through fresh OAuth; last real chat event **NOT VERIFIED**.
+- Current read-only DB snapshot: story `REVIEW`, generation `AI-GENERATED`, an AI-provenance canonical node and an AI proposal `PENDING`; 1 host persona, 0 viewers, 7 revisions, 0 chat receipts, 0 votes. No data was reset. Host approval is needed before a vote can be opened.
+- Security review: `.env` ignored, no `.env` or DB tracked, zero high-confidence credential-signature matches across six Git commits, no known pip-audit vulnerabilities, no Bandit Medium/High findings. Gitleaks/Trivy and independent assessment were unavailable/not run.
+- Final blockers remain actual Twitch chat from two viewers, vote-to-canon transition, fresh client-secret exchange, real OBS footage, actual primary `/status` ID, short YouTube video, eligibility interpretation, and final Devpost submission. No artifact or API event is inferred.

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
+from collections import Counter
 from datetime import UTC, datetime, timedelta
 from urllib.parse import urlencode, urlparse
 
@@ -19,6 +21,7 @@ from .service import StoryService
 HELIX = "https://api.twitch.tv/helix"
 OAUTH = "https://id.twitch.tv/oauth2"
 EVENTSUB_WS = "wss://eventsub.wss.twitch.tv/ws"
+LOGGER = logging.getLogger(__name__)
 
 
 class EventSubRevoked(RuntimeError):
@@ -126,7 +129,39 @@ class TwitchConnector:
         self.status = "NOT_CONFIGURED" if settings.mode == "demo" else "NEEDS_AUTH"
         self.last_event: str | None = None
         self.last_error: str | None = None
+        self.chat_notifications_received = 0
+        self.chat_outcomes: Counter[str] = Counter()
+        self.last_chat_outcome = "NOT_SEEN"
         self._stop = asyncio.Event()
+
+    def _record_chat_outcome(self, result: str) -> None:
+        if result in {"JOINED", "UPDATED", "VOTED", "QUEUED", "LEFT"}:
+            outcome = "ACCEPTED"
+        elif result == "DUPLICATE":
+            outcome = "DUPLICATE"
+        elif result == "COOLDOWN":
+            outcome = "COOLDOWN"
+        elif result in {"INVALID", "NOT_JOINED", "NO_STORY", "PROFILE"}:
+            outcome = "INVALID"
+        elif result in {"IGNORED", "UNKNOWN", "HELP", "INFO"}:
+            outcome = "IGNORED"
+        else:
+            outcome = "REJECTED"
+        self.last_chat_outcome = outcome
+        self.chat_outcomes[outcome] += 1
+
+    def chat_health(self) -> dict[str, int | str]:
+        """Return aggregate outcomes only; never expose chat text or Twitch identities."""
+        return {
+            "chat_notifications_received": self.chat_notifications_received,
+            "last_chat_command_outcome": self.last_chat_outcome,
+            "chat_commands_accepted": self.chat_outcomes["ACCEPTED"],
+            "chat_commands_ignored": self.chat_outcomes["IGNORED"],
+            "chat_commands_cooldown": self.chat_outcomes["COOLDOWN"],
+            "chat_commands_invalid": self.chat_outcomes["INVALID"],
+            "chat_commands_duplicate": self.chat_outcomes["DUPLICATE"],
+            "chat_processing_errors": self.chat_outcomes["PROCESSING_ERROR"],
+        }
 
     async def subscribe(self, token: str, session_id: str) -> None:
         request = {
@@ -179,7 +214,12 @@ class TwitchConnector:
             while not self._stop.is_set():
                 raw = await asyncio.wait_for(ws.recv(), timeout=keepalive + 12)
                 msg = json.loads(raw)
-                kind = msg.get("metadata", {}).get("message_type")
+                if not isinstance(msg, dict):
+                    continue
+                metadata = msg.get("metadata")
+                if not isinstance(metadata, dict):
+                    continue
+                kind = metadata.get("message_type")
                 if kind == "session_welcome":
                     session = msg["payload"]["session"]
                     keepalive = max(
@@ -191,25 +231,41 @@ class TwitchConnector:
                     need_subscription = False
                     self.status = "LIVE_TWITCH"
                 elif kind == "session_notification":
-                    notification = msg.get("payload", {})
-                    subscription = notification.get("subscription", {})
-                    event = notification.get("event", {})
+                    notification = msg.get("payload")
+                    if not isinstance(notification, dict):
+                        continue
+                    subscription = notification.get("subscription")
+                    event = notification.get("event")
                     if (
-                        subscription.get("type") != "channel.chat.message"
+                        not isinstance(subscription, dict)
+                        or not isinstance(event, dict)
+                        or subscription.get("type") != "channel.chat.message"
                         or str(subscription.get("version")) != "1"
                         or event.get("broadcaster_user_id") != self.settings.twitch_broadcaster_id
                     ):
                         continue
-                    content = event.get("message", {}).get("text", "")
-                    msg_id = event.get("message_id") or msg.get("metadata", {}).get("message_id")
+                    message = event.get("message")
+                    content = message.get("text", "") if isinstance(message, dict) else ""
+                    msg_id = event.get("message_id") or metadata.get("message_id")
                     if msg_id and event.get("chatter_user_id"):
-                        self.service.process_chat(
-                            str(msg_id),
-                            str(event["chatter_user_id"]),
-                            str(event.get("chatter_user_name") or "Viewer"),
-                            content,
-                        )
+                        self.chat_notifications_received += 1
                         self.last_event = datetime.now(UTC).isoformat()
+                        try:
+                            result = await asyncio.to_thread(
+                                self.service.process_chat,
+                                str(msg_id),
+                                str(event["chatter_user_id"]),
+                                str(event.get("chatter_user_name") or "Viewer"),
+                                content,
+                            )
+                        except Exception as exc:  # noqa: BLE001 - surface only safe aggregate telemetry
+                            self.last_chat_outcome = "PROCESSING_ERROR"
+                            self.chat_outcomes["PROCESSING_ERROR"] += 1
+                            LOGGER.warning(
+                                "EventSub chat processing failed (%s)", type(exc).__name__
+                            )
+                        else:
+                            self._record_chat_outcome(result)
                 elif kind == "session_reconnect":
                     url = msg["payload"]["session"]["reconnect_url"]
                     parsed = urlparse(url)

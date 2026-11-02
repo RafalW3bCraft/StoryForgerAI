@@ -31,4 +31,4 @@ The EventSub adapter uses `channel.chat.message` v1 and a user OAuth token with 
 - Single process/SQLite is the supported operating model.
 - `StoryService.process_chat` writes receipts only for recognized state-changing commands, persists accepted message IDs, and uses bounded process-local per-viewer cooldown and rejected-event replay caches. The app also serializes model generation with an in-process lock. These controls do not coordinate multiple workers, and accepted receipt retention/cleanup remains a deployment concern.
 - Persona relationships, voice capture, camera guidance, image-generation models, richer alternate-timeline exploration, and multi-stream collaboration are not implemented.
-- Live EventSub and AI provider behavior remains unverified without user credentials.
+- The stored Twitch host identity, active EventSub subscription, and one real schema-validated AI response have been verified with the configured credentials. Actual chat-command delivery, viewer voting, reconnect under live traffic, and browser/OBS presentation remain unverified; see `FINAL_EVIDENCE_REPORT.md`.

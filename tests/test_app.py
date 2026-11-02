@@ -83,6 +83,9 @@ def test_twitch_oauth_login_redirects_a_different_browser_origin_to_configured_u
         twitch_broadcaster_id="111",
         twitch_reader_id="111",
         token_key=Fernet.generate_key().decode(),
+        ai_base_url="https://provider.test/v1",
+        ai_api_key="fake-ai-key",
+        ai_model="test-model",
     )
     app = create_app(settings)
     route = next(route for route in app.routes if getattr(route, "path", None) == "/auth/twitch")
@@ -321,6 +324,9 @@ def test_live_oauth_configuration_rejects_missing_secrets(tmp_path):
         twitch_broadcaster_id="111",
         twitch_reader_id="111",
         token_key=Fernet.generate_key().decode(),
+        ai_base_url="https://provider.test/v1",
+        ai_api_key="fake-ai-key",
+        ai_model="test-model",
     )
     create_app(s)
     from storyforge.twitch import login_url
@@ -403,6 +409,26 @@ def test_demo_mode_never_implicitly_enables_external_ai():
     assert settings.ai_enabled is False
 
 
+def test_live_mode_requires_configured_ai_provider(tmp_path):
+    from cryptography.fernet import Fernet
+
+    from storyforge.config import Settings
+
+    settings = Settings(
+        mode="live",
+        database=str(tmp_path / "live-without-ai.db"),
+        secret="s" * 48,
+        twitch_client_id="client-id",
+        twitch_client_secret="client-secret",
+        twitch_broadcaster_id="111",
+        twitch_reader_id="111",
+        token_key=Fernet.generate_key().decode(),
+    )
+
+    with pytest.raises(ValueError, match="AI_BASE_URL, AI_API_KEY and AI_MODEL"):
+        settings.validate()
+
+
 def test_settings_read_environment_for_each_new_instance(monkeypatch):
     from storyforge.config import Settings
 
@@ -449,9 +475,9 @@ def test_host_oauth_callback_success_binds_only_configured_broadcaster(monkeypat
         twitch_broadcaster_id="111",
         twitch_reader_id="111",
         token_key=Fernet.generate_key().decode(),
-        ai_base_url="",
-        ai_api_key="",
-        ai_model="",
+        ai_base_url="https://provider.test/v1",
+        ai_api_key="fake-ai-key",
+        ai_model="test-model",
     )
     stored_tokens = []
 
@@ -498,9 +524,9 @@ def test_host_oauth_callback_rejects_state_mismatch_and_wrong_broadcaster(monkey
         twitch_broadcaster_id="111",
         twitch_reader_id="111",
         token_key=Fernet.generate_key().decode(),
-        ai_base_url="",
-        ai_api_key="",
-        ai_model="",
+        ai_base_url="https://provider.test/v1",
+        ai_api_key="fake-ai-key",
+        ai_model="test-model",
     )
     calls = []
 
@@ -573,6 +599,9 @@ def test_oauth_token_exchange_failure_shows_safe_http_status(monkeypatch, caplog
         twitch_broadcaster_id="111",
         twitch_reader_id="111",
         token_key=Fernet.generate_key().decode(),
+        ai_base_url="https://provider.test/v1",
+        ai_api_key="fake-ai-key",
+        ai_model="test-model",
     )
     request = httpx.Request("POST", "https://id.twitch.tv/oauth2/token")
     response = httpx.Response(400, request=request)
@@ -618,11 +647,19 @@ def test_app_runner_disables_access_logs_and_prints_configured_url(monkeypatch, 
         twitch_broadcaster_id="111",
         twitch_reader_id="111",
         token_key=Fernet.generate_key().decode(),
+        ai_base_url="https://provider.test/v1",
+        ai_api_key="fake-ai-key",
+        ai_model="test-model",
     )
     calls = []
     fake_uvicorn = SimpleNamespace(run=lambda *args, **kwargs: calls.append((args, kwargs)))
     monkeypatch.setitem(sys.modules, "uvicorn", fake_uvicorn)
-    monkeypatch.setattr(app_module, "Settings", lambda: settings)
+    settings_to_load = [settings]
+    monkeypatch.setattr(
+        app_module,
+        "Settings",
+        SimpleNamespace(from_environment=lambda: settings_to_load[0]),
+    )
 
     app_module.main()
 
@@ -641,8 +678,11 @@ def test_app_runner_disables_access_logs_and_prints_configured_url(monkeypatch, 
         twitch_broadcaster_id="111",
         twitch_reader_id="111",
         token_key=Fernet.generate_key().decode(),
+        ai_base_url="https://provider.test/v1",
+        ai_api_key="fake-ai-key",
+        ai_model="test-model",
     )
-    monkeypatch.setattr(app_module, "Settings", lambda: http_settings)
+    settings_to_load[0] = http_settings
     app_module.main()
     startup = capsys.readouterr().out
     assert "Open StoryForge at http://127.0.0.1:8000" in startup
