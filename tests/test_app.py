@@ -483,7 +483,11 @@ def test_host_oauth_callback_success_binds_only_configured_broadcaster(monkeypat
 
     async def exchange(_settings, code):
         assert code == "one-time-code"
-        return {"access_token": "access-test", "refresh_token": "refresh-test"}
+        return {
+            "access_token": "access-test",
+            "refresh_token": "refresh-test",
+            "scope": ["user:read:chat", "user:write:chat"],
+        }
 
     async def user_for_token(_settings, access_token):
         assert access_token == "access-test"
@@ -506,6 +510,7 @@ def test_host_oauth_callback_success_binds_only_configured_broadcaster(monkeypat
     assert request.session["role"] == "host"
     assert request.session["twitch_user_id"] == "111"
     assert stored_tokens and app.state.service.persona("111").is_host
+    assert app.state.connector.chat_reply_status == "READY"
 
 
 def test_host_oauth_callback_rejects_state_mismatch_and_wrong_broadcaster(monkeypatch, tmp_path):

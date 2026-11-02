@@ -3,6 +3,7 @@ import json
 import sqlite3
 from contextlib import closing
 from typing import ClassVar
+from urllib.parse import parse_qs, urlsplit
 
 import pytest
 from cryptography.fernet import Fernet
@@ -195,6 +196,369 @@ def test_oauth_helpers_use_exact_callback_and_authenticated_user(monkeypatch, tm
     assert user["id"] == "111"
 
 
+def test_host_oauth_requests_read_and_write_chat_scopes(tmp_path):
+    from storyforge.twitch import login_url
+
+    settings = Settings(
+        mode="demo",
+        database=str(tmp_path / "scope.db"),
+        secret="x" * 40,
+        base_url="http://localhost:8000",
+        twitch_client_id="client-id",
+    )
+
+    scopes = parse_qs(urlsplit(login_url(settings, role="host", state="state")).query)["scope"][
+        0
+    ].split()
+    assert set(scopes) == {"user:read:chat", "user:write:chat"}
+
+
+def test_saved_host_token_preserves_granted_scopes_encrypted(tmp_path):
+    from storyforge.twitch import host_has_chat_write_scope
+
+    key = Fernet.generate_key().decode()
+    settings = Settings(
+        mode="demo",
+        database=str(tmp_path / "scope-vault.db"),
+        secret="x" * 40,
+        token_key=key,
+    )
+    engine = make_engine(settings.db_url)
+    sessions = factory(engine)
+    save_host_token(
+        settings,
+        sessions,
+        {
+            "access_token": "access-secret",
+            "refresh_token": "refresh-secret",
+            "expires_in": 3600,
+            "scope": ["user:read:chat", "user:write:chat"],
+        },
+    )
+
+    assert host_has_chat_write_scope(settings, sessions) is True
+    save_host_token(
+        settings,
+        sessions,
+        {
+            "access_token": "legacy-access",
+            "refresh_token": "legacy-refresh",
+            "expires_in": 3600,
+            "scope": ["user:read:chat"],
+        },
+    )
+    assert host_has_chat_write_scope(settings, sessions) is False
+    with sessions() as db:
+        from storyforge.models import TokenVault
+
+        stored = db.get(TokenVault, "host").encrypted_json
+    assert "user:write:chat" not in stored
+    engine.dispose()
+
+
+def test_twitch_send_chat_message_uses_threaded_helix_payload(monkeypatch, tmp_path):
+    from storyforge import twitch
+
+    settings = Settings(
+        mode="live",
+        database=str(tmp_path / "send-message.db"),
+        secret="x" * 40,
+        twitch_client_id="client-id",
+        twitch_broadcaster_id="111",
+        twitch_reader_id="111",
+    )
+    engine = make_engine(settings.db_url)
+    connector = TwitchConnector(settings, factory(engine), StoryService(factory(engine)))
+    observed = {}
+
+    class Response:
+        status_code = 200
+
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"data": [{"is_sent": True, "message_id": "reply-id"}]}
+
+    class Client:
+        def __init__(self, **kwargs):
+            assert kwargs["timeout"] <= 10
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            pass
+
+        async def post(self, url, *, json, headers):
+            observed.update(url=url, body=json, headers=headers)
+            return Response()
+
+    monkeypatch.setattr(twitch.httpx, "AsyncClient", Client)
+    assert (
+        asyncio.run(
+            connector.send_chat_message(
+                "fake-access-token", "parent-message", "You joined StoryForge."
+            )
+        )
+        is True
+    )
+    assert observed["url"] == twitch.HELIX + "/chat/messages"
+    assert observed["body"] == {
+        "broadcaster_id": "111",
+        "sender_id": "111",
+        "message": "You joined StoryForge.",
+        "reply_parent_message_id": "parent-message",
+    }
+    assert observed["headers"]["Authorization"] == "Bearer fake-access-token"
+    assert connector.chat_reply_status == "READY"
+    engine.dispose()
+
+
+def test_twitch_send_chat_message_reports_rejected_send_without_details(monkeypatch, tmp_path):
+    from storyforge import twitch
+
+    settings = Settings(
+        mode="live",
+        database=str(tmp_path / "send-rejected.db"),
+        secret="x" * 40,
+        twitch_client_id="client-id",
+        twitch_broadcaster_id="111",
+        twitch_reader_id="111",
+    )
+    engine = make_engine(settings.db_url)
+    connector = TwitchConnector(settings, factory(engine), StoryService(factory(engine)))
+
+    class Response:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"data": [{"is_sent": False, "drop_reason": {"code": "no_permission"}}]}
+
+    class Client:
+        def __init__(self, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            pass
+
+        async def post(self, *args, **kwargs):
+            return Response()
+
+    monkeypatch.setattr(twitch.httpx, "AsyncClient", Client)
+    assert asyncio.run(connector.send_chat_message("fake", "parent", "Short reply.")) is False
+    assert connector.chat_reply_status == "SEND_REJECTED"
+    assert "no_permission" not in str(connector.chat_health())
+    engine.dispose()
+
+
+def test_twitch_send_chat_message_redacts_unauthorized_response(monkeypatch, tmp_path):
+    from storyforge import twitch
+
+    settings = Settings(
+        mode="live",
+        database=str(tmp_path / "send-unauthorized.db"),
+        secret="x" * 40,
+        twitch_client_id="client-id",
+        twitch_broadcaster_id="111",
+        twitch_reader_id="111",
+    )
+    engine = make_engine(settings.db_url)
+    connector = TwitchConnector(settings, factory(engine), StoryService(factory(engine)))
+
+    class Client:
+        def __init__(self, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            pass
+
+        async def post(self, url, **kwargs):
+            request = twitch.httpx.Request("POST", url)
+            return twitch.httpx.Response(401, request=request)
+
+    monkeypatch.setattr(twitch.httpx, "AsyncClient", Client)
+    with pytest.raises(twitch.httpx.HTTPStatusError):
+        asyncio.run(
+            connector.send_chat_message(
+                "private-access-token", "parent-id", "You joined StoryForge."
+            )
+        )
+
+    assert connector.chat_reply_status == "REAUTH_REQUIRED"
+    assert "private-access-token" not in str(connector.chat_health())
+    engine.dispose()
+
+
+def test_eventsub_queues_acknowledgement_for_accepted_command(monkeypatch, tmp_path):
+    from storyforge import twitch
+
+    settings = Settings(
+        mode="live",
+        database=str(tmp_path / "reply-queue.db"),
+        secret="x" * 40,
+        twitch_client_id="client-id",
+        twitch_broadcaster_id="111",
+        twitch_reader_id="111",
+    )
+    engine = make_engine(settings.db_url)
+    sessions = factory(engine)
+    connector = TwitchConnector(settings, sessions, StoryService(sessions))
+    connector.chat_reply_status = "READY"
+    messages = [
+        json.dumps(
+            {
+                "metadata": {"message_type": "session_welcome"},
+                "payload": {"session": {"id": "session-1", "keepalive_timeout_seconds": 30}},
+            }
+        ),
+        json.dumps(
+            {
+                "metadata": {"message_type": "notification"},
+                "payload": {
+                    "subscription": {"type": "channel.chat.message", "version": "1"},
+                    "event": {
+                        "broadcaster_user_id": "111",
+                        "message_id": "viewer-message-id",
+                        "chatter_user_id": "viewer-id",
+                        "chatter_user_name": "Viewer",
+                        "message": {"text": "!join"},
+                    },
+                },
+            }
+        ),
+    ]
+
+    class FakeSocket:
+        async def recv(self):
+            message = messages.pop(0)
+            if not messages:
+                connector.stop()
+            return message
+
+        async def close(self):
+            pass
+
+    async def fake_connect(*_args, **_kwargs):
+        return FakeSocket()
+
+    async def no_op_subscribe(*_args):
+        pass
+
+    connector.subscribe = no_op_subscribe
+    monkeypatch.setattr(twitch.websockets, "connect", fake_connect)
+    asyncio.run(connector.consume("fake-token"))
+
+    assert connector.chat_notifications_received == 1
+    assert connector.chat_outcomes["ACCEPTED"] == 1
+    assert connector.service.persona("viewer-id") is not None
+    assert connector._reply_queue.get_nowait() == (
+        "viewer-message-id",
+        "You joined StoryForge. Check the overlay for your character.",
+    )
+    assert connector.chat_replies_queued == 1
+    assert connector.chat_health()["chat_reply_status"] == "READY"
+    engine.dispose()
+
+
+def test_reply_worker_sends_queue_item_and_counts_confirmed_send(monkeypatch, tmp_path):
+    from storyforge import twitch
+
+    settings = Settings(
+        mode="live",
+        database=str(tmp_path / "reply-worker.db"),
+        secret="x" * 40,
+        twitch_broadcaster_id="111",
+        twitch_reader_id="111",
+    )
+    engine = make_engine(settings.db_url)
+    sessions = factory(engine)
+    connector = TwitchConnector(settings, sessions, StoryService(sessions))
+    connector.chat_reply_status = "READY"
+    connector._reply_queue.put_nowait(("parent-id", "You joined StoryForge."))
+    sent = []
+
+    async def fake_get_token(*_args):
+        return "fake-access-token"
+
+    async def fake_send(token, parent_id, message):
+        sent.append((token, parent_id, message))
+        connector.stop()
+        return True
+
+    monkeypatch.setattr(twitch, "get_host_token", fake_get_token)
+    monkeypatch.setattr(twitch, "host_has_chat_write_scope", lambda *_args: True)
+    connector.send_chat_message = fake_send
+    asyncio.run(connector._reply_worker())
+
+    assert sent == [("fake-access-token", "parent-id", "You joined StoryForge.")]
+    assert connector.chat_replies_sent == 1
+    assert connector._reply_queue.empty()
+    engine.dispose()
+
+
+def test_full_chat_reply_queue_is_counted_without_logging_content(tmp_path):
+    settings = Settings(
+        mode="live",
+        database=str(tmp_path / "reply-overflow.db"),
+        secret="x" * 40,
+        twitch_broadcaster_id="111",
+        twitch_reader_id="111",
+    )
+    engine = make_engine(settings.db_url)
+    sessions = factory(engine)
+    connector = TwitchConnector(settings, sessions, StoryService(sessions))
+    connector.chat_reply_status = "READY"
+    for index in range(33):
+        connector._queue_chat_reply(f"message-{index}", "JOINED")
+
+    assert connector.chat_replies_queued == 32
+    assert connector.chat_replies_dropped == 1
+    assert connector.chat_health()["chat_replies_dropped"] == 1
+    engine.dispose()
+
+
+def test_reply_is_skipped_and_counted_until_write_scope_is_authorized(tmp_path):
+    settings = Settings(
+        mode="live",
+        database=str(tmp_path / "reply-scope-required.db"),
+        secret="x" * 40,
+        twitch_broadcaster_id="111",
+        twitch_reader_id="111",
+    )
+    engine = make_engine(settings.db_url)
+    sessions = factory(engine)
+    connector = TwitchConnector(settings, sessions, StoryService(sessions))
+    connector.chat_reply_status = "REAUTH_REQUIRED"
+
+    connector._queue_chat_reply("private-message-id", "JOINED")
+
+    assert connector.chat_replies_queued == 0
+    assert connector.chat_replies_skipped == 1
+    assert connector._reply_queue.empty()
+    assert connector.chat_health()["chat_reply_status"] == "REAUTH_REQUIRED"
+    engine.dispose()
+
+
+def test_chat_reply_mapping_is_safe_and_silent_for_spam_outcomes():
+    from storyforge.twitch import reply_for_chat_outcome
+
+    assert reply_for_chat_outcome("JOINED") == (
+        "You joined StoryForge. Check the overlay for your character."
+    )
+    assert reply_for_chat_outcome("VOTED") == "Vote recorded. Check the overlay for the tally."
+    assert reply_for_chat_outcome("HELP").startswith("Commands:")
+    for result in ("UNKNOWN", "DUPLICATE", "COOLDOWN", "IGNORED", "PROCESSING_ERROR"):
+        assert reply_for_chat_outcome(result) is None
+
+
 def test_websocket_mock_reconnect_preserves_subscription(monkeypatch, tmp_path):
     from storyforge import twitch
 
@@ -234,7 +598,7 @@ def test_websocket_mock_reconnect_preserves_subscription(monkeypatch, tmp_path):
     old = [
         msg("session_welcome", {"session": {"id": "old-1", "keepalive_timeout_seconds": 15}}),
         msg(
-            "session_notification",
+            "notification",
             {
                 "event": {
                     "broadcaster_user_id": "channel-1",
@@ -254,7 +618,7 @@ def test_websocket_mock_reconnect_preserves_subscription(monkeypatch, tmp_path):
     new = [
         msg("session_welcome", {"session": {"id": "new-2", "keepalive_timeout_seconds": 15}}),
         msg(
-            "session_notification",
+            "notification",
             {
                 "event": {
                     "broadcaster_user_id": "channel-1",
@@ -338,7 +702,7 @@ def test_eventsub_chat_processing_does_not_block_event_loop_during_burst(monkeyp
     messages.extend(
         json.dumps(
             {
-                "metadata": {"message_type": "session_notification"},
+                "metadata": {"message_type": "notification"},
                 "payload": {
                     "subscription": {"type": "channel.chat.message", "version": "1"},
                     "event": {
@@ -409,7 +773,7 @@ def test_eventsub_malformed_chat_isolated_and_duplicate_receipt_counted(monkeypa
     def notification(message_id, message):
         return json.dumps(
             {
-                "metadata": {"message_type": "session_notification"},
+                "metadata": {"message_type": "notification"},
                 "payload": {
                     "subscription": {"type": "channel.chat.message", "version": "1"},
                     "event": {
@@ -558,7 +922,7 @@ def test_websocket_ignores_chat_without_exact_broadcaster_identity(monkeypatch, 
             data["broadcaster_user_id"] = broadcaster_id
         return json.dumps(
             {
-                "metadata": {"message_type": "session_notification"},
+                "metadata": {"message_type": "notification"},
                 "payload": {
                     "subscription": {"type": "channel.chat.message", "version": "1"},
                     "event": data,
