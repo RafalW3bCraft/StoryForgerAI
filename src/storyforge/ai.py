@@ -111,6 +111,14 @@ class OpenAICompatibleGenerator:
         if not valid:
             raise ValueError("AI_BASE_URL must be a safe provider base URL using HTTPS")
         self.url = url + "/chat/completions"
+        model_owner, separator, model_name = settings.ai_model.casefold().partition("/")
+        self.disable_featherless_qwen_thinking = (
+            parsed.hostname is not None
+            and parsed.hostname.casefold() == "api.featherless.ai"
+            and separator == "/"
+            and model_owner == "qwen"
+            and model_name.startswith("qwen3")
+        )
 
     async def generate(
         self,
@@ -146,6 +154,8 @@ class OpenAICompatibleGenerator:
                 {"role": "user", "content": content},
             ],
         }
+        if self.disable_featherless_qwen_thinking:
+            payload["chat_template_kwargs"] = {"enable_thinking": False}
         async with httpx.AsyncClient(timeout=20, follow_redirects=False) as client:
             response = await client.post(
                 self.url,

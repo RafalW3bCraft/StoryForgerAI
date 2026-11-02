@@ -527,6 +527,7 @@ def test_ai_provider_validated_structured_mock(monkeypatch):
         async def post(self, url, json, headers):
             assert url == "https://provider.test/v1/chat/completions"
             assert json["model"] == "test-model"
+            assert "chat_template_kwargs" not in json
             return FakeResponse()
 
     monkeypatch.setattr(ai.httpx, "AsyncClient", FakeClient)
@@ -540,6 +541,57 @@ def test_ai_provider_validated_structured_mock(monkeypatch):
         )
     )
     assert len(generated.choices) == 2
+
+
+def test_featherless_qwen_disables_thinking_for_final_narrative(monkeypatch):
+    from storyforge import ai
+
+    settings = Settings(
+        mode="live",
+        ai_base_url="https://api.featherless.ai/v1",
+        ai_api_key="fake",
+        ai_model="Qwen/Qwen3.8-27B",
+    )
+    sent_payload = {}
+
+    class Response:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            proposal = {
+                "title": "The Atlas Opens",
+                "narrative": "The sealed atlas opens and paints a silver road across the library floor.",
+                "choices": ["Follow the silver road", "Ask the librarian for help"],
+            }
+            return {"choices": [{"message": {"content": json.dumps(proposal)}}]}
+
+    class Client:
+        def __init__(self, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            pass
+
+        async def post(self, url, json, headers):
+            sent_payload.update(json)
+            return Response()
+
+    monkeypatch.setattr(ai.httpx, "AsyncClient", Client)
+    asyncio.run(
+        OpenAICompatibleGenerator(settings).generate(
+            world="A library of memories",
+            history="",
+            decision="open the atlas",
+            personas=["Aster (scholar)"],
+            contributions=[],
+        )
+    )
+
+    assert sent_payload["chat_template_kwargs"] == {"enable_thinking": False}
 
 
 def test_ai_provider_rejects_malformed_or_empty_content(monkeypatch):
